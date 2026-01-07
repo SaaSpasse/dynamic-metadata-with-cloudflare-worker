@@ -1,14 +1,45 @@
 export const config = {
-  domainSource: "https://f69a71f6-9fd8-443b-a040-78beb5d404d4.weweb-preview.io", // Your WeWeb app preview link
+  domainSource: "https://60a33b77-84a0-4236-bb01-f71274631596.weweb-preview.io", // Your WeWeb app preview link
   patterns: [
-      {
-          pattern: "/event/[^/]+",
-          metaDataEndpoint: "https://xeo6-2sgh-ehgj.n7.xano.io/api:8wD10mRd/event/{id}/meta"
-      },
-      {
-          pattern: "/team/profile/[^/]+",
-          metaDataEndpoint: "https://xeo6-2sgh-ehgj.n7.xano.io/api:LjwxezTv/team/profile/{profile_id}/meta"
-      }
-      // Add more patterns and their metadata endpoints as needed
+    {
+      pattern: "^/avantages/[^/]+",
+      metaDataEndpoint: "https://qhmbbgerejsxibphinnu.supabase.co/functions/v1/get-meta/avantages/{slug}"
+    },
+    {
+      pattern: "^/canaux-marketing/[^/]+",
+      metaDataEndpoint: "https://qhmbbgerejsxibphinnu.supabase.co/functions/v1/get-meta/canaux-marketing/{slug}"
+    },
+    {
+      pattern: "^/startups/[^/]+",
+      metaDataEndpoint: "https://qhmbbgerejsxibphinnu.supabase.co/functions/v1/get-meta/startups/{slug}"
+    },
+    {
+      pattern: "^/blog/[^/]+",
+      metaDataEndpoint: "https://qhmbbgerejsxibphinnu.supabase.co/functions/v1/get-meta/blog/{slug}"
+    },
+    {
+      pattern: "^/glossaire/[^/]+",
+      metaDataEndpoint: "https://qhmbbgerejsxibphinnu.supabase.co/functions/v1/get-meta/glossaire/{slug}"
+    },
+    {
+      pattern: "^/industrie/[^/]+",
+      metaDataEndpoint: "https://qhmbbgerejsxibphinnu.supabase.co/functions/v1/get-meta/industrie/{slug}"
+    },
+    {
+      pattern: "^/lieux/[^/]+",
+      metaDataEndpoint: "https://qhmbbgerejsxibphinnu.supabase.co/functions/v1/get-meta/lieux/{slug}"
+    },
+    {
+      pattern: "^/partenaires/[^/]+",
+      metaDataEndpoint: "https://qhmbbgerejsxibphinnu.supabase.co/functions/v1/get-meta/partenaires/{slug}"
+    },
+    {
+      pattern: "^/episode/[^/]+",
+      metaDataEndpoint: "https://qhmbbgerejsxibphinnu.supabase.co/functions/v1/get-meta/episode/{slug}"
+    },
+    {
+      pattern: "^/tech-stack/[^/]+",
+      metaDataEndpoint: "https://qhmbbgerejsxibphinnu.supabase.co/functions/v1/get-meta/tech-stack/{slug}"
+    }
   ]
 };
