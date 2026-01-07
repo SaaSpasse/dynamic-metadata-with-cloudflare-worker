@@ -1,51 +1,89 @@
-import { config } from '../config.js';
+import { config } from './config.js';
+
+interface Env {
+  SUPABASE_KEY: string; // Set this in Cloudflare Worker settings
+}
+
+interface Metadata {
+  title: string;
+  description: string;
+  image: string;
+  keywords: string;
+}
+
+interface PatternConfig {
+  pattern: string;
+  metaDataEndpoint: string;
+}
 
 export default {
-  async fetch(request, env, ctx) {
-    // Extracting configuration values
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const domainSource = config.domainSource;
-    const patterns = config.patterns;
+    const patterns: PatternConfig[] = config.patterns;
 
-    console.log("Worker started");
-
-    // Parse the request URL
     const url = new URL(request.url);
-    const referer = request.headers.get('Referer')
+    const referer = request.headers.get('Referer');
 
     // Function to get the pattern configuration that matches the URL
-    function getPatternConfig(url) {
+    function getPatternConfig(pathname: string): PatternConfig | null {
       for (const patternConfig of patterns) {
         const regex = new RegExp(patternConfig.pattern);
-        let pathname = url + (url.endsWith('/') ? '' : '/');
-        if (regex.test(pathname)) {
+        const normalizedPath = pathname + (pathname.endsWith('/') ? '' : '/');
+        if (regex.test(normalizedPath)) {
           return patternConfig;
         }
       }
       return null;
     }
 
-    // Function to check if the URL matches the page data pattern (For the WeWeb app)
-    function isPageData(url) {
+    // Function to check if the URL matches the page data pattern (For WeWeb app)
+    function isPageData(pathname: string): boolean {
       const pattern = /\/public\/data\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\.json/;
-      return pattern.test(url);
+      return pattern.test(pathname);
     }
 
-    async function requestMetadata(url, metaDataEndpoint) {
-      // Remove any trailing slash from the URL
-      const trimmedUrl = url.endsWith('/') ? url.slice(0, -1) : url;
-    
-      // Split the trimmed URL by '/' and get the last part: The id
+    // Function to request metadata from Supabase Edge Function
+    async function requestMetadata(pathname: string, metaDataEndpoint: string): Promise<Metadata> {
+      const trimmedUrl = pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
       const parts = trimmedUrl.split('/');
-      const id = parts[parts.length - 1];
-    
-      // Replace the placeholder in metaDataEndpoint with the actual id
+      const slug = parts[parts.length - 1];
+
       const placeholderPattern = /{([^}]+)}/;
-      const metaDataEndpointWithId = metaDataEndpoint.replace(placeholderPattern, id);
-    
-      // Fetch metadata from the API endpoint
-      const metaDataResponse = await fetch(metaDataEndpointWithId);
-      const metadata = await metaDataResponse.json();
-      return metadata;
+      const metaDataEndpointWithSlug = metaDataEndpoint.replace(placeholderPattern, slug);
+
+      try {
+        const metaDataResponse = await fetch(metaDataEndpointWithSlug, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${env.SUPABASE_KEY}`,
+            'apikey': env.SUPABASE_KEY,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!metaDataResponse.ok) {
+          console.error(`Error fetching metadata: ${metaDataResponse.status} ${metaDataResponse.statusText}`);
+          const errorText = await metaDataResponse.text();
+          console.error(`Response body: ${errorText}`);
+          // Return default metadata on error
+          return {
+            title: 'SaaSPasse',
+            description: 'Découvrez les meilleures startups SaaS du Québec',
+            image: '',
+            keywords: ''
+          };
+        }
+
+        return await metaDataResponse.json();
+      } catch (error) {
+        console.error('Error in requestMetadata:', error);
+        return {
+          title: 'SaaSPasse',
+          description: 'Découvrez les meilleures startups SaaS du Québec',
+          image: '',
+          keywords: ''
+        };
+      }
     }
 
     // Handle dynamic page requests
@@ -53,46 +91,34 @@ export default {
     if (patternConfig) {
       console.log("Dynamic page detected:", url.pathname);
 
-      // Fetch the source page content
-      let source = await fetch(`${domainSource}${url.pathname}`);
-
-      // Remove "X-Robots-Tag" from the headers
-      const sourceHeaders = new Headers(source.headers);
-      sourceHeaders.delete('X-Robots-Tag');
-      source = new Response(source.body, {
-        status: source.status,
-        headers: sourceHeaders
-      });
-
+      const source = await fetch(`${domainSource}${url.pathname}`);
       const metadata = await requestMetadata(url.pathname, patternConfig.metaDataEndpoint);
       console.log("Metadata fetched:", metadata);
 
-      // Create a custom header handler with the fetched metadata
       const customHeaderHandler = new CustomHeaderHandler(metadata);
 
-      // Transform the source HTML with the custom headers
       return new HTMLRewriter()
         .on('*', customHeaderHandler)
         .transform(source);
 
     // Handle page data requests for the WeWeb app
     } else if (isPageData(url.pathname)) {
-      	console.log("Page data detected:", url.pathname);
-	console.log("Referer:", referer);
+      console.log("Page data detected:", url.pathname);
+      console.log("Referer:", referer);
 
-      // Fetch the source data content
       const sourceResponse = await fetch(`${domainSource}${url.pathname}`);
-      let sourceData = await sourceResponse.json();
+      let sourceData = await sourceResponse.json() as any;
 
       let pathname = referer;
       pathname = pathname ? pathname + (pathname.endsWith('/') ? '' : '/') : null;
+      
       if (pathname !== null) {
-        const patternConfigForPageData = getPatternConfig(pathname);
+        const patternConfigForPageData = getPatternConfig(new URL(pathname).pathname);
         if (patternConfigForPageData) {
-          const metadata = await requestMetadata(pathname, patternConfigForPageData.metaDataEndpoint);
-          console.log("Metadata fetched:", metadata);
+          const metadata = await requestMetadata(new URL(pathname).pathname, patternConfigForPageData.metaDataEndpoint);
+          console.log("Metadata fetched for page data:", metadata);
 
-          // Ensure nested objects exist in the source data
+          // Ensure nested objects exist
           sourceData.page = sourceData.page || {};
           sourceData.page.title = sourceData.page.title || {};
           sourceData.page.meta = sourceData.page.meta || {};
@@ -101,24 +127,27 @@ export default {
           sourceData.page.socialTitle = sourceData.page.socialTitle || {};
           sourceData.page.socialDesc = sourceData.page.socialDesc || {};
 
-          // Update source data with the fetched metadata
+          // Update source data with fetched metadata
           if (metadata.title) {
             sourceData.page.title.en = metadata.title;
+            sourceData.page.title.fr = metadata.title;
             sourceData.page.socialTitle.en = metadata.title;
+            sourceData.page.socialTitle.fr = metadata.title;
           }
           if (metadata.description) {
             sourceData.page.meta.desc.en = metadata.description;
+            sourceData.page.meta.desc.fr = metadata.description;
             sourceData.page.socialDesc.en = metadata.description;
+            sourceData.page.socialDesc.fr = metadata.description;
           }
           if (metadata.image) {
             sourceData.page.metaImage = metadata.image;
           }
           if (metadata.keywords) {
             sourceData.page.meta.keywords.en = metadata.keywords;
+            sourceData.page.meta.keywords.fr = metadata.keywords;
           }
 
-	  console.log("returning file: ", JSON.stringify(sourceData));
-          // Return the modified JSON object
           return new Response(JSON.stringify(sourceData), {
             headers: { 'Content-Type': 'application/json' }
           });
@@ -126,95 +155,90 @@ export default {
       }
     }
 
-    // If the URL does not match any patterns, fetch and return the original content
+    // If no patterns match, fetch and return original content
     console.log("Fetching original content for:", url.pathname);
     const sourceUrl = new URL(`${domainSource}${url.pathname}`);
-    const sourceRequest = new Request(sourceUrl, request);
-    const sourceResponse = await fetch(sourceRequest);
-
-    // Create a new response without the "X-Robots-Tag" header
-    const modifiedHeaders = new Headers(sourceResponse.headers);
-    modifiedHeaders.delete('X-Robots-Tag');
-
-    return new Response(sourceResponse.body, {
-      status: sourceResponse.status,
-      headers: modifiedHeaders,
-    });
+    const sourceRequest = new Request(sourceUrl.toString(), request);
+    return await fetch(sourceRequest);
   }
 };
 
-// CustomHeaderHandler class to modify HTML content based on metadata
+// CustomHeaderHandler class to modify HTML content
 class CustomHeaderHandler {
-  constructor(metadata) {
+  private metadata: Metadata;
+
+  constructor(metadata: Metadata) {
     this.metadata = metadata;
   }
 
-  element(element) {
-    // Replace the <title> tag content
-    if (element.tagName == "title") {
-      console.log('Replacing title tag content');
+  element(element: Element) {
+    // Replace <title> tag content
+    if (element.tagName === "title") {
       element.setInnerContent(this.metadata.title);
     }
+
     // Replace meta tags content
-    if (element.tagName == "meta") {
+    if (element.tagName === "meta") {
       const name = element.getAttribute("name");
-      switch (name) {
-        case "title":
-          element.setAttribute("content", this.metadata.title);
-          break;
-        case "description":
-          element.setAttribute("content", this.metadata.description);
-          break;
-        case "image":
-          element.setAttribute("content", this.metadata.image);
-          break;
-        case "keywords":
-          element.setAttribute("content", this.metadata.keywords);
-          break;
-        case "twitter:title":
-          element.setAttribute("content", this.metadata.title);
-          break;
-        case "twitter:description":
-          element.setAttribute("content", this.metadata.description);
-          break;
-      }
-
+      const property = element.getAttribute("property");
       const itemprop = element.getAttribute("itemprop");
-      switch (itemprop) {
-        case "name":
-          element.setAttribute("content", this.metadata.title);
-          break;
-        case "description":
-          element.setAttribute("content", this.metadata.description);
-          break;
-        case "image":
-          element.setAttribute("content", this.metadata.image);
-          break;
+
+      // Handle name attribute
+      if (name) {
+        switch (name) {
+          case "title":
+            element.setAttribute("content", this.metadata.title);
+            break;
+          case "description":
+            element.setAttribute("content", this.metadata.description);
+            break;
+          case "image":
+            element.setAttribute("content", this.metadata.image);
+            break;
+          case "keywords":
+            element.setAttribute("content", this.metadata.keywords);
+            break;
+          case "twitter:title":
+            element.setAttribute("content", this.metadata.title);
+            break;
+          case "twitter:description":
+            element.setAttribute("content", this.metadata.description);
+            break;
+          case "twitter:image":
+            element.setAttribute("content", this.metadata.image);
+            break;
+        }
       }
 
-      const type = element.getAttribute("property");
-      switch (type) {
-        case "og:title":
-          console.log('Replacing og:title');
-          element.setAttribute("content", this.metadata.title);
-          break;
-        case "og:description":
-          console.log('Replacing og:description');
-          element.setAttribute("content", this.metadata.description);
-          break;
-        case "og:image":
-          console.log('Replacing og:image');
-          element.setAttribute("content", this.metadata.image);
-          break;
+      // Handle itemprop attribute
+      if (itemprop) {
+        switch (itemprop) {
+          case "name":
+            element.setAttribute("content", this.metadata.title);
+            break;
+          case "description":
+            element.setAttribute("content", this.metadata.description);
+            break;
+          case "image":
+            element.setAttribute("content", this.metadata.image);
+            break;
+        }
       }
 
-      // Remove the noindex meta tag
-      const robots = element.getAttribute("name");
-      if (robots === "robots" && element.getAttribute("content") === "noindex") {
-        console.log('Removing noindex tag');
-        element.remove();
+      // Handle property attribute (OpenGraph)
+      if (property) {
+        switch (property) {
+          case "og:title":
+            element.setAttribute("content", this.metadata.title);
+            break;
+          case "og:description":
+            element.setAttribute("content", this.metadata.description);
+            break;
+          case "og:image":
+            element.setAttribute("content", this.metadata.image);
+            break;
+        }
       }
-	    
     }
   }
 }
