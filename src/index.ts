@@ -85,7 +85,61 @@ export default {
         };
       }
     }
+		
+// --- SITEMAP ---
+  if (url.pathname === "/sitemap.xml") {
+    const domain = "https://saaspasse.com";
 
+    // 1. Fetch WeWeb sitemap and replace preview URLs
+    const wewebSitemap = await fetch(`${domainSource}/sitemap.xml`);
+    let sitemapText = await wewebSitemap.text();
+    sitemapText = sitemapText.replaceAll(domainSource, domain);
+
+    // 2. Fetch dynamic paths from Supabase
+    const tables = [
+      { table: "avantages", prefix: "/avantages" },
+      { table: "canaux_marketing", prefix: "/canaux-marketing" },
+      { table: "companies", prefix: "/startups" },
+      { table: "etudes_de_cas", prefix: "/blog" },
+      { table: "glossaire", prefix: "/glossaire" },
+      { table: "industries", prefix: "/industrie" },
+      { table: "lieux", prefix: "/lieux" },
+      { table: "partenaires", prefix: "/partenaires" },
+      { table: "podcast", prefix: "/episode" },
+      { table: "tech_stack", prefix: "/tech-stack" },
+    ];
+
+    const supabaseUrl = "https://qhmbbgerejsxibphinnu.supabase.co/rest/v1";
+    const headers = {
+      "apikey": env.SUPABASE_KEY,
+      "Authorization": `Bearer ${env.SUPABASE_KEY}`,
+    };
+
+    const allEntries = await Promise.all(
+      tables.map(async ({ table, prefix }) => {
+        try {
+          const res = await fetch(`${supabaseUrl}/${table}?select=path`, { headers });
+          const rows = await res.json();
+          return rows.map((row) =>
+            `<url><loc>${domain}${prefix}/${row.path}/</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>`
+          ).join("\n");
+        } catch (e) {
+          console.error(`Sitemap error for ${table}:`, e);
+          return "";
+        }
+      })
+    );
+
+    // 3. Insert dynamic entries before closing </urlset>
+    const dynamicXml = allEntries.join("\n");
+    sitemapText = sitemapText.replace("</urlset>", `${dynamicXml}\n</urlset>`);
+
+    return new Response(sitemapText, {
+      headers: { "Content-Type": "application/xml" },
+    });
+  }
+  // --- END SITEMAP ---
+		
     // Handle dynamic page requests
     const patternConfig = getPatternConfig(url.pathname);
     if (patternConfig) {
