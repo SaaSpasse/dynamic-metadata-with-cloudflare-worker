@@ -9,6 +9,7 @@ interface Metadata {
   description: string;
   image: string;
   keywords: string;
+  structuredData?: Record<string, any> | null;
 }
 
 interface PatternConfig {
@@ -150,9 +151,11 @@ export default {
       console.log("Metadata fetched:", metadata);
 
       const customHeaderHandler = new CustomHeaderHandler(metadata);
+      const structuredDataHandler = new StructuredDataHandler(metadata);
 
       return new HTMLRewriter()
         .on('*', customHeaderHandler)
+        .on('head', structuredDataHandler)
         .transform(source);
 
     // Handle page data requests for the WeWeb app
@@ -292,6 +295,22 @@ class CustomHeaderHandler {
             break;
         }
       }
+    }
+  }
+}
+
+// StructuredDataHandler class to inject JSON-LD into <head>
+class StructuredDataHandler {
+  private metadata: Metadata;
+
+  constructor(metadata: Metadata) {
+    this.metadata = metadata;
+  }
+
+  element(element: Element) {
+    if (this.metadata.structuredData) {
+      const jsonLd = JSON.stringify(this.metadata.structuredData);
+      element.append(`<script type="application/ld+json">${jsonLd}</script>`, { html: true });
     }
   }
 }
