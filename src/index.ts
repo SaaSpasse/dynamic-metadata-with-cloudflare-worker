@@ -1,4 +1,4 @@
-import { config } from './config.js';
+import { config } from '../config.js';
 
 interface Env {
   SUPABASE_KEY: string; // Set this in Cloudflare Worker settings
@@ -211,9 +211,8 @@ export default {
 
     // If no patterns match, fetch and return original content
     console.log("Fetching original content for:", url.pathname);
-    const sourceUrl = new URL(`${domainSource}${url.pathname}`);
-    const sourceRequest = new Request(sourceUrl.toString(), request);
-    return await fetch(sourceRequest);
+    const sourceUrl = `${domainSource}${url.pathname}${url.search}`;
+    return await fetch(sourceUrl);
   }
 };
 
