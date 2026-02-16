@@ -1,4 +1,4 @@
-import { config } from '../config.js';
+import { config, canonicalDomain, redirects } from '../config.js';
 
 interface Env {
   SUPABASE_KEY: string; // Set this in Cloudflare Worker settings
@@ -24,6 +24,23 @@ export default {
 
     const url = new URL(request.url);
     const referer = request.headers.get('Referer');
+
+    // --- REDIRECTS ---
+    const normalizedPath = url.pathname.endsWith('/') && url.pathname !== '/'
+      ? url.pathname.slice(0, -1)
+      : url.pathname;
+    const redirectTarget = (redirects as Record<string, string>)[normalizedPath];
+    if (redirectTarget) {
+      const target = redirectTarget.startsWith('http')
+        ? redirectTarget
+        : `${canonicalDomain}${redirectTarget}`;
+      return Response.redirect(target, 301);
+    }
+    // --- END REDIRECTS ---
+
+    // Build canonical URL (always saaspasse.com, with trailing slash)
+    const canonicalPath = url.pathname.endsWith('/') ? url.pathname : url.pathname + '/';
+    const canonicalUrl = `${canonicalDomain}${canonicalPath}`;
 
     // Function to get the pattern configuration that matches the URL
     function getPatternConfig(pathname: string): PatternConfig | null {
@@ -87,6 +104,17 @@ export default {
       }
     }
 		
+// --- ROBOTS.TXT ---
+  if (url.pathname === "/robots.txt") {
+    const robotsResponse = await fetch(`${domainSource}/robots.txt`);
+    let robotsText = await robotsResponse.text();
+    robotsText = robotsText.replaceAll(domainSource, canonicalDomain);
+    return new Response(robotsText, {
+      headers: { "Content-Type": "text/plain" },
+    });
+  }
+  // --- END ROBOTS.TXT ---
+
 // --- SITEMAP ---
   if (url.pathname === "/sitemap.xml") {
     const domain = "https://saaspasse.com";
@@ -152,10 +180,14 @@ export default {
 
       const customHeaderHandler = new CustomHeaderHandler(metadata);
       const structuredDataHandler = new StructuredDataHandler(metadata);
+      const canonicalHandler = new CanonicalHandler(canonicalUrl);
+      const hreflangHandler = new HreflangHandler(domainSource, canonicalUrl);
 
       return new HTMLRewriter()
         .on('*', customHeaderHandler)
         .on('head', structuredDataHandler)
+        .on('head', canonicalHandler)
+        .on('link[rel="alternate"]', hreflangHandler)
         .transform(source);
 
     // Handle page data requests for the WeWeb app
@@ -215,7 +247,18 @@ export default {
     // If no patterns match, fetch and return original content
     console.log("Fetching original content for:", url.pathname);
     const sourceUrl = `${domainSource}${url.pathname}${url.search}`;
-    return await fetch(sourceUrl);
+    const response = await fetch(sourceUrl);
+
+    // Inject canonical + fix hreflang in HTML responses (static pages)
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('text/html')) {
+      return new HTMLRewriter()
+        .on('head', new CanonicalHandler(canonicalUrl))
+        .on('link[rel="alternate"]', new HreflangHandler(domainSource, canonicalUrl))
+        .transform(response);
+    }
+
+    return response;
   }
 };
 
@@ -296,6 +339,43 @@ class CustomHeaderHandler {
         }
       }
     }
+  }
+}
+
+// HreflangHandler class to fix hreflang URLs (replace preview domain and :param placeholder)
+class HreflangHandler {
+  private domainSource: string;
+  private canonicalUrl: string;
+
+  constructor(domainSource: string, canonicalUrl: string) {
+    this.domainSource = domainSource;
+    this.canonicalUrl = canonicalUrl;
+  }
+
+  element(element: Element) {
+    const href = element.getAttribute('href');
+    if (href && href.includes('weweb-preview.io')) {
+      if (href.includes(':param')) {
+        // Dynamic page: replace entire href with the canonical URL
+        element.setAttribute('href', this.canonicalUrl);
+      } else {
+        // Static page: just swap the domain
+        element.setAttribute('href', href.replace(/https:\/\/[^/]*weweb-preview\.io/, canonicalDomain));
+      }
+    }
+  }
+}
+
+// CanonicalHandler class to inject <link rel="canonical"> into <head>
+class CanonicalHandler {
+  private canonicalUrl: string;
+
+  constructor(canonicalUrl: string) {
+    this.canonicalUrl = canonicalUrl;
+  }
+
+  element(element: Element) {
+    element.append(`<link rel="canonical" href="${this.canonicalUrl}" />`, { html: true });
   }
 }
 
