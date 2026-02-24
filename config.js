@@ -22,6 +22,7 @@ export const redirects = {
   "/episode/episode-18-antoine-bisson--moderniser-lusine": "/episode/episode-18-antoine-bisson-moderniser-lusine",
   "/glossaire": "/glossaire-saas",
   "/partenaires/coveo": "/partenaires",
+  "/episode/episode-50-francois-xavier-ratte-de-saas-a-mars": "/podcast",
 };
 
 export const config = {
