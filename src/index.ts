@@ -144,10 +144,17 @@ export default {
       "Authorization": `Bearer ${env.SUPABASE_KEY}`,
     };
 
+    // Tables that use published_at for scheduled publishing
+    const scheduledTables = new Set(["podcast", "partenaires"]);
+
     const allEntries = await Promise.all(
       tables.map(async ({ table, prefix }) => {
         try {
-          const res = await fetch(`${supabaseUrl}/${table}?select=path`, { headers });
+          let query = `${supabaseUrl}/${table}?select=path`;
+          if (scheduledTables.has(table)) {
+            query += `&published_at=lte.${new Date().toISOString()}`;
+          }
+          const res = await fetch(query, { headers });
           const rows = await res.json();
           return rows.map((row) =>
             `<url><loc>${domain}${prefix}/${row.path}/</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>`
