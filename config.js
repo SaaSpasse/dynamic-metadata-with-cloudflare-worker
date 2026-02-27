@@ -23,6 +23,7 @@ export const redirects = {
   "/glossaire": "/glossaire-saas",
   "/partenaires/coveo": "/partenaires",
   "/episode/episode-50-francois-xavier-ratte-de-saas-a-mars": "/podcast",
+  "/emploi/dev-front-end-full-stack": "/emploi/sofistic-ai-dev-front-end-full-stack",
 };
 
 export const config = {
