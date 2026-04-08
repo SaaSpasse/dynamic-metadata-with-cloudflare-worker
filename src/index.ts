@@ -109,6 +109,8 @@ export default {
     const robotsResponse = await fetch(`${domainSource}/robots.txt`);
     let robotsText = await robotsResponse.text();
     robotsText = robotsText.replaceAll(domainSource, canonicalDomain);
+    // WeWeb may still reference the old preview domain in content
+    robotsText = robotsText.replaceAll('https://60a33b77-84a0-4236-bb01-f71274631596.weweb-preview.io', canonicalDomain);
     return new Response(robotsText, {
       headers: { "Content-Type": "text/plain" },
     });
@@ -123,6 +125,8 @@ export default {
     const wewebSitemap = await fetch(`${domainSource}/sitemap.xml`);
     let sitemapText = await wewebSitemap.text();
     sitemapText = sitemapText.replaceAll(domainSource, domain);
+    // WeWeb may still reference the old preview domain in content
+    sitemapText = sitemapText.replaceAll('https://60a33b77-84a0-4236-bb01-f71274631596.weweb-preview.io', domain);
 
     // 2. Fetch dynamic paths from Supabase
     const tables = [
@@ -361,13 +365,13 @@ class HreflangHandler {
 
   element(element: Element) {
     const href = element.getAttribute('href');
-    if (href && href.includes('weweb-preview.io')) {
+    if (href && (href.includes('weweb-preview.io') || href.includes('production.weweb.io'))) {
       if (href.includes(':param')) {
         // Dynamic page: replace entire href with the canonical URL
         element.setAttribute('href', this.canonicalUrl);
       } else {
         // Static page: just swap the domain
-        element.setAttribute('href', href.replace(/https:\/\/[^/]*weweb-preview\.io/, canonicalDomain));
+        element.setAttribute('href', href.replace(/https:\/\/[^/]*(?:weweb-preview\.io|production\.weweb\.io)/, canonicalDomain));
       }
     }
   }

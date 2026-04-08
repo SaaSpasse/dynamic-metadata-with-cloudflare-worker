@@ -38,7 +38,7 @@ test/                 # Tests (vide pour l'instant)
 
 - `canonicalDomain` : `"https://saaspasse.com"`
 - `redirects` : Map des redirections 301 (21 entrées migrées de Webflow)
-- `config.domainSource` : URL preview WeWeb (`60a33b77-84a0-4236-bb01-f71274631596.weweb-preview.io`)
+- `config.domainSource` : URL production WeWeb (`60a33b77-84a0-4236-bb01-f71274631596-production.weweb.io`)
 - `config.patterns` : 10 patterns dynamiques avec endpoints Supabase Edge Function `get-meta`
 
 ### Variables d'environnement (Secrets Cloudflare)
@@ -79,3 +79,20 @@ npm test             # Lancer les tests (vitest)
 ## Lien avec le monorepo principal
 
 Ce repo est le fork séparé `SaaSpasse/dynamic-metadata-with-cloudflare-worker` référencé dans le monorepo `saaspasse-app`. Les Edge Functions Supabase `get-meta` appelées par ce Worker sont définies dans `saaspasse-app/supabase/functions/`.
+
+## Résilience WeWeb
+
+### Contexte (2026-04-08)
+
+L'infra `weweb-preview.io` a été down 63 min (weweb-team/status-page#145), causant un downtime de saaspasse.com. WeWeb a ensuite annoncé la migration officielle de `weweb-preview.io` vers `production.weweb.io`. Le `domainSource` a été migré vers `production.weweb.io` pour éliminer la dépendance au preview domain déprécié et supprimer le redirect 301 intermédiaire.
+
+WeWeb a 3 infras CloudFront séparées : preview (déprécié), production, et custom domains (100% uptime). Le HreflangHandler dans `src/index.ts` check encore `weweb-preview.io` car le HTML de `production.weweb.io` contient toujours ces références dans les hreflang — à surveiller si WeWeb met à jour.
+
+### Option future : custom domain WeWeb
+
+Pour une résilience maximale, on pourrait configurer `origin.saaspasse.com` comme custom domain WeWeb (infra 100% uptime). Nécessite : ajout du domaine dans WeWeb, 2 CNAME en DNS only dans Cloudflare, puis mise à jour du `domainSource` et du `HreflangHandler`.
+
+### Comptes et accès
+- **Cloudflare** : compte SaaSpasse (`bonjourhi@saaspasse.com`, account ID `94914547edc4560d3fcfe3401b0f8cfa`)
+- **WeWeb** : projet ID `60a33b77-84a0-4236-bb01-f71274631596`
+- **Deploy** : `npm run deploy` ou push vers main (CI/CD GitHub Actions)

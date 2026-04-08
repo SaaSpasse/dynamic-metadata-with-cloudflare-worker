@@ -27,7 +27,7 @@ export const redirects = {
 };
 
 export const config = {
-  domainSource: "https://60a33b77-84a0-4236-bb01-f71274631596.weweb-preview.io", // Your WeWeb app preview link
+  domainSource: "https://60a33b77-84a0-4236-bb01-f71274631596-production.weweb.io", // WeWeb production domain (migrated from weweb-preview.io)
   patterns: [
     {
       pattern: "^/avantages/[^/]+",
