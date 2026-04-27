@@ -179,7 +179,33 @@ export default {
     });
   }
   // --- END SITEMAP ---
-		
+
+// --- PHOSPHOR ICON FALLBACK ---
+// WeWeb tree-shakes icons at build, only bundling those referenced literally in
+// the editor. Icons whose name comes from a Supabase formula/binding are missing
+// from /icons/phosphor-*/ on production. Fallback to the official Phosphor CDN.
+  const phosphorMatch = url.pathname.match(/^\/icons\/phosphor-(regular|light|bold|fill|thin|duotone)\/(.+)\.svg$/);
+  if (phosphorMatch) {
+    const [, weight, name] = phosphorMatch;
+    const wewebResponse = await fetch(`${domainSource}${url.pathname}`);
+    if (wewebResponse.ok) {
+      return wewebResponse;
+    }
+    const fallbackUrl = `https://unpkg.com/@phosphor-icons/core@2.1.1/assets/${weight}/${name}.svg`;
+    const fallback = await fetch(fallbackUrl, { cf: { cacheEverything: true, cacheTtl: 31536000 } });
+    if (fallback.ok) {
+      return new Response(fallback.body, {
+        headers: {
+          'Content-Type': 'image/svg+xml',
+          'Cache-Control': 'public, max-age=31536000, immutable',
+          'Access-Control-Allow-Origin': '*',
+        },
+      });
+    }
+    return new Response('Icon not found', { status: 404 });
+  }
+  // --- END PHOSPHOR ICON FALLBACK ---
+
     // Handle dynamic page requests
     const patternConfig = getPatternConfig(url.pathname);
     if (patternConfig) {
