@@ -28,6 +28,10 @@ export const redirects = {
 
 export const config = {
   domainSource: "https://60a33b77-84a0-4236-bb01-f71274631596-production.weweb.io", // WeWeb production domain (migrated from weweb-preview.io)
+  // Origine du nouveau front v3 (Next.js sur Vercel). Les routes migrées (voir
+  // V3_ROUTES dans src/index.ts) sont proxifiées ici. Pendant la cohabitation:
+  // seulement /v3-test + /_next/*. À vider ("") pour rollback total du strangler.
+  v3Origin: "https://saaspasse-v3.vercel.app",
   patterns: [
     {
       pattern: "^/avantages/[^/]+",

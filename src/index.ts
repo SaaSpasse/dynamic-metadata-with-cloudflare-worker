@@ -25,6 +25,24 @@ export default {
     const url = new URL(request.url);
     const referer = request.headers.get('Referer');
 
+    // --- STRANGLER (migration v3) ---
+    // Route les chemins déjà migrés vers le nouveau front Next.js sur Vercel.
+    // Pendant la cohabitation, seuls des chemins NET-NEW passent (aucun trafic
+    // existant touché): la route de test /v3-test + les assets Next /_next/*.
+    // Rollback instantané = retirer le chemin de V3_ROUTES.
+    // Le front génère ses URLs absolues depuis une env var (jamais le Host reçu),
+    // donc envoyer Host = *.vercel.app au fetch ci-dessous est sans impact SEO.
+    const V3_ORIGIN = config.v3Origin; // https://saaspasse-v3.vercel.app (config.js)
+    const V3_ROUTES: RegExp[] = [/^\/v3-test(\/|$)/, /^\/_next\//];
+    if (V3_ORIGIN && V3_ROUTES.some((r) => r.test(url.pathname))) {
+      const target = `${V3_ORIGIN}${url.pathname}${url.search}`;
+      const proxied = new Request(target, request);
+      proxied.headers.set('x-forwarded-host', url.host);
+      proxied.headers.set('x-forwarded-proto', 'https');
+      return fetch(proxied);
+    }
+    // --- END STRANGLER ---
+
     // --- REDIRECTS ---
     const normalizedPath = url.pathname.endsWith('/') && url.pathname !== '/'
       ? url.pathname.slice(0, -1)
