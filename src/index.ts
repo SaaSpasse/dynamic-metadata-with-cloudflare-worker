@@ -27,14 +27,34 @@ export default {
 
     // --- STRANGLER (migration v3) ---
     // Route les chemins déjà migrés vers le nouveau front Next.js sur Vercel.
-    // Pendant la cohabitation, seuls des chemins NET-NEW passent (aucun trafic
-    // existant touché): la route de test /v3-test + les assets Next /_next/*.
-    // Rollback instantané = retirer le chemin de V3_ROUTES.
+    // VAGUE 1 (2026-07-21): job board + répertoire + annuaires — basculés
+    // ensemble parce que le header v3 les lie (nav /startups). Le podcast est
+    // prêt côté v3 mais reste v2 pour cette vague (mesure par étapes).
+    // Rollback instantané = retirer le chemin de V3_ROUTES + wrangler deploy.
     // Le front génère ses URLs absolues depuis une env var (jamais le Host reçu),
     // donc envoyer Host = *.vercel.app au fetch ci-dessous est sans impact SEO.
     const V3_ORIGIN = config.v3Origin; // https://saaspasse-v3.vercel.app (config.js)
-    const V3_ROUTES: RegExp[] = [/^\/v3-test(\/|$)/, /^\/_next\//];
+    const V3_ROUTES: RegExp[] = [
+      /^\/v3-test(\/|$)/,
+      /^\/_next\//,
+      /^\/emplois(\/|$)/,
+      /^\/emploi\//,
+      /^\/startups(\/|$)/,
+      /^\/tech-stack\//,
+      /^\/industrie\//,
+      /^\/lieux\//,
+      /^\/avantages\//,
+      /^\/canaux-marketing\//,
+    ];
     if (V3_ORIGIN && V3_ROUTES.some((r) => r.test(url.pathname))) {
+      // Les URLs v2 indexées portent un trailing slash (/startups/poka/); les
+      // canonicals v3 n'en ont pas → 301 permanent vers la forme canonique.
+      if (url.pathname.length > 1 && url.pathname.endsWith('/')) {
+        return Response.redirect(
+          `${canonicalDomain}${url.pathname.slice(0, -1)}${url.search}`,
+          301
+        );
+      }
       const target = `${V3_ORIGIN}${url.pathname}${url.search}`;
       const proxied = new Request(target, request);
       proxied.headers.set('x-forwarded-host', url.host);
@@ -147,17 +167,28 @@ export default {
     sitemapText = sitemapText.replaceAll('https://60a33b77-84a0-4236-bb01-f71274631596.weweb-preview.io', domain);
 
     // 2. Fetch dynamic paths from Supabase
-    const tables = [
-      { table: "avantages", prefix: "/avantages" },
-      { table: "canaux_marketing", prefix: "/canaux-marketing" },
-      { table: "companies", prefix: "/startups" },
+    // v3: true = route migrée → URL SANS trailing slash (canonical v3).
+    // filter = clauses PostgREST additionnelles (gating).
+    const tables: { table: string; prefix: string; v3?: boolean; filter?: string }[] = [
+      { table: "avantages", prefix: "/avantages", v3: true },
+      { table: "canaux_marketing", prefix: "/canaux-marketing", v3: true },
+      // published: la v2 listait TOUTES les fiches, dépubliées incluses.
+      { table: "companies", prefix: "/startups", v3: true, filter: "published=eq.true" },
       { table: "etudes_de_cas", prefix: "/blog" },
       { table: "glossaire", prefix: "/glossaire" },
-      { table: "industries", prefix: "/industrie" },
-      { table: "lieux", prefix: "/lieux" },
+      { table: "industries", prefix: "/industrie", v3: true },
+      { table: "lieux", prefix: "/lieux", v3: true },
       { table: "partenaires", prefix: "/partenaires" },
       { table: "podcast", prefix: "/episode" },
-      { table: "tech_stack", prefix: "/tech-stack" },
+      { table: "tech_stack", prefix: "/tech-stack", v3: true },
+      // Les offres n'ont JAMAIS été au sitemap (v2 incluse) — 177 pages avec
+      // JSON-LD JobPosting invisibles pour Google Jobs sans ça.
+      {
+        table: "job_board_complete",
+        prefix: "/emploi",
+        v3: true,
+        filter: `deleted_at=is.null&expires_at=gt.${encodeURIComponent(new Date().toISOString())}&company_published=eq.true`,
+      },
     ];
 
     const supabaseUrl = "https://qhmbbgerejsxibphinnu.supabase.co/rest/v1";
@@ -170,16 +201,20 @@ export default {
     const scheduledTables = new Set(["podcast", "partenaires"]);
 
     const allEntries = await Promise.all(
-      tables.map(async ({ table, prefix }) => {
+      tables.map(async ({ table, prefix, v3, filter }) => {
         try {
           let query = `${supabaseUrl}/${table}?select=path`;
+          if (filter) {
+            query += `&${filter}`;
+          }
           if (scheduledTables.has(table)) {
             query += `&published_at=lte.${new Date().toISOString()}`;
           }
           const res = await fetch(query, { headers });
           const rows = await res.json();
+          const slash = v3 ? "" : "/";
           return rows.map((row) =>
-            `<url><loc>${domain}${prefix}/${row.path}/</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>`
+            `<url><loc>${domain}${prefix}/${row.path}${slash}</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>`
           ).join("\n");
         } catch (e) {
           console.error(`Sitemap error for ${table}:`, e);
