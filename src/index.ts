@@ -45,6 +45,9 @@ export default {
       /^\/lieux\//,
       /^\/avantages\//,
       /^\/canaux-marketing\//,
+      // Assets statiques du front v3 (web/public/) — paths exacts, aucun
+      // chevauchement avec WeWeb (qui sert son logo sous /images/).
+      /^\/wordmark-saaspasse(-light)?\.png$/,
     ];
     if (V3_ORIGIN && V3_ROUTES.some((r) => r.test(url.pathname))) {
       // Les URLs v2 indexées portent un trailing slash (/startups/poka/); les
