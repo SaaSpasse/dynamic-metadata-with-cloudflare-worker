@@ -1,25 +1,36 @@
-// test/index.spec.ts
-import { env, createExecutionContext, waitOnExecutionContext, SELF } from 'cloudflare:test';
+// test/index.spec.ts — routing du strangler (bascule totale 19 juil 2026).
+// Les fetches sortants (Vercel/WeWeb) sont réels: tests d'intégration légers.
+import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
 import { describe, it, expect } from 'vitest';
 import worker from '../src/index';
 
-// For now, you'll need to do something like this to get a correctly-typed
-// `Request` to pass to `worker.fetch()`.
 const IncomingRequest = Request<unknown, IncomingRequestCfProperties>;
 
-describe('Hello World worker', () => {
-	it('responds with Hello World! (unit style)', async () => {
-		const request = new IncomingRequest('http://example.com');
-		// Create an empty context to pass to `worker.fetch()`.
-		const ctx = createExecutionContext();
-		const response = await worker.fetch(request, env, ctx);
-		// Wait for all `Promise`s passed to `ctx.waitUntil()` to settle before running test assertions
-		await waitOnExecutionContext(ctx);
-		expect(await response.text()).toMatchInlineSnapshot(`"Hello World!"`);
+async function get(path: string): Promise<Response> {
+	const request = new IncomingRequest(`https://saaspasse.com${path}`, { redirect: 'manual' });
+	const ctx = createExecutionContext();
+	const response = await worker.fetch(request, env, ctx);
+	await waitOnExecutionContext(ctx);
+	return response;
+}
+
+describe('Strangler v3', () => {
+	it('la home est servie par le front v3', async () => {
+		const response = await get('/');
+		expect(response.status).toBe(200);
+		const html = await response.text();
+		expect(html).toContain('data-theme="dark"');
+		expect(html).toContain('home-hero');
 	});
 
-	it('responds with Hello World! (integration style)', async () => {
-		const response = await SELF.fetch('https://example.com');
-		expect(await response.text()).toMatchInlineSnapshot(`"Hello World!"`);
+	it('les routes migrées avec trailing slash redirigent 301 vers la forme canonique', async () => {
+		const response = await get('/podcast/');
+		expect(response.status).toBe(301);
+		expect(response.headers.get('location')).toBe('https://saaspasse.com/podcast');
+	});
+
+	it('/lajobdumois suit la chaîne Worker → Next 308 → /emplois', async () => {
+		const response = await get('/lajobdumois');
+		expect([301, 308]).toContain(response.status);
 	});
 });

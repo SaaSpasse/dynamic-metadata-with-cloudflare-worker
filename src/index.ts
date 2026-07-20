@@ -37,6 +37,9 @@ export default {
     const V3_ROUTES: RegExp[] = [
       /^\/v3-test(\/|$)/,
       /^\/_next\//,
+      // Bascule totale du public (19 juil): la home et tout le contenu servent
+      // du v3. Seuls auth/ajout-saas/dashboards/admin restent WeWeb (filet).
+      /^\/$/,
       /^\/emplois(\/|$)/,
       /^\/emploi\//,
       /^\/startups(\/|$)/,
@@ -45,9 +48,20 @@ export default {
       /^\/lieux\//,
       /^\/avantages\//,
       /^\/canaux-marketing\//,
+      /^\/podcast(\/|$)/,
+      /^\/episode\//,
+      /^\/glossaire-saas(\/|$)/,
+      /^\/glossaire\//,
+      /^\/blog(\/|$)/,
+      /^\/partenaires(\/|$)/,
+      /^\/a-propos(\/|$)/,
+      /^\/contact(\/|$)/,
+      /^\/lajobdumois(\/|$)/,
       // Assets statiques du front v3 (web/public/) — paths exacts, aucun
       // chevauchement avec WeWeb (qui sert son logo sous /images/).
       /^\/wordmark-saaspasse(-light)?\.png$/,
+      /^\/paladin-editorial\.webp$/,
+      /^\/frank-editorial\.webp$/,
     ];
     if (V3_ORIGIN && V3_ROUTES.some((r) => r.test(url.pathname))) {
       // Les URLs v2 indexées portent un trailing slash (/startups/poka/); les
@@ -168,6 +182,12 @@ export default {
     sitemapText = sitemapText.replaceAll(domainSource, domain);
     // WeWeb may still reference the old preview domain in content
     sitemapText = sitemapText.replaceAll('https://60a33b77-84a0-4236-bb01-f71274631596.weweb-preview.io', domain);
+    // Pages statiques migrées v3 (bascule totale 19 juil): canonical SANS
+    // trailing slash. La job du mois est retirée (308 → /emplois).
+    for (const p of ["podcast", "partenaires", "a-propos", "contact", "blog", "glossaire-saas"]) {
+      sitemapText = sitemapText.replaceAll(`<loc>${domain}/${p}/</loc>`, `<loc>${domain}/${p}</loc>`);
+    }
+    sitemapText = sitemapText.replace(/<url>\s*<loc>[^<]*\/lajobdumois\/?<\/loc>[\s\S]*?<\/url>/g, "");
 
     // 2. Fetch dynamic paths from Supabase
     // v3: true = route migrée → URL SANS trailing slash (canonical v3).
@@ -177,12 +197,12 @@ export default {
       { table: "canaux_marketing", prefix: "/canaux-marketing", v3: true },
       // published: la v2 listait TOUTES les fiches, dépubliées incluses.
       { table: "companies", prefix: "/startups", v3: true, filter: "published=eq.true" },
-      { table: "etudes_de_cas", prefix: "/blog" },
-      { table: "glossaire", prefix: "/glossaire" },
+      { table: "etudes_de_cas", prefix: "/blog", v3: true },
+      { table: "glossaire", prefix: "/glossaire", v3: true },
       { table: "industries", prefix: "/industrie", v3: true },
       { table: "lieux", prefix: "/lieux", v3: true },
-      { table: "partenaires", prefix: "/partenaires" },
-      { table: "podcast", prefix: "/episode" },
+      { table: "partenaires", prefix: "/partenaires", v3: true },
+      { table: "podcast", prefix: "/episode", v3: true },
       { table: "tech_stack", prefix: "/tech-stack", v3: true },
       // Les offres n'ont JAMAIS été au sitemap (v2 incluse) — 177 pages avec
       // JSON-LD JobPosting invisibles pour Google Jobs sans ça.
