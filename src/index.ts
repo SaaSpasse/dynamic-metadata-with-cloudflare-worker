@@ -62,6 +62,17 @@ export default {
       /^\/wordmark-saaspasse(-light)?\.png$/,
       /^\/paladin-editorial\.webp$/,
       /^\/frank-editorial\.webp$/,
+      // DERNIÈRE VAGUE (28 juil): auth + dashboards + admin + forms. Après ça,
+      // WeWeb ne sert plus rien. Rollback = retirer ces lignes + wrangler deploy.
+      /^\/login(\/|$)/,
+      /^\/auth\//,
+      /^\/dashboard(\/|$)/,
+      /^\/admin(\/|$)/,
+      /^\/ajout-saas(\/|$)/,
+      /^\/ajout-emploi(\/|$)/,
+      /^\/signup(\/|$)/,
+      /^\/mot-de-passe-oublie(\/|$)/,
+      /^\/nouveau-mot-de-passe(\/|$)/,
     ];
     if (V3_ORIGIN && V3_ROUTES.some((r) => r.test(url.pathname))) {
       // Les URLs v2 indexées portent un trailing slash (/startups/poka/); les
