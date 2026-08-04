@@ -62,6 +62,9 @@ export default {
       /^\/wordmark-saaspasse(-light)?\.png$/,
       /^\/paladin-editorial\.webp$/,
       /^\/frank-editorial\.webp$/,
+      // Portraits de l'équipe (/a-propos, 3 août). Dossier dédié: WeWeb ne
+      // sert rien sous /equipe/, aucune collision possible.
+      /^\/equipe\//,
       // DERNIÈRE VAGUE (28 juil): auth + dashboards + admin + forms. Après ça,
       // WeWeb ne sert plus rien. Rollback = retirer ces lignes + wrangler deploy.
       /^\/login(\/|$)/,
