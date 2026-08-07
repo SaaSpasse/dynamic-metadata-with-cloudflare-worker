@@ -1,5 +1,5 @@
-// test/index.spec.ts — routing du strangler (bascule totale 19 juil 2026).
-// Les fetches sortants (Vercel/WeWeb) sont réels: tests d'intégration légers.
+// test/index.spec.ts — routeur edge post-WeWeb.
+// Les fetches vers Vercel sont réels: tests d'intégration légers.
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
 import { describe, it, expect } from 'vitest';
 import worker from '../src/index';
@@ -14,8 +14,8 @@ async function get(path: string): Promise<Response> {
 	return response;
 }
 
-describe('Strangler v3', () => {
-	it('la home est servie par le front v3', async () => {
+describe('Routeur Next.js', () => {
+	it('la home est servie par Next.js', async () => {
 		const response = await get('/');
 		expect(response.status).toBe(200);
 		const html = await response.text();
@@ -32,5 +32,34 @@ describe('Strangler v3', () => {
 	it('/lajobdumois suit la chaîne Worker → Next 308 → /emplois', async () => {
 		const response = await get('/lajobdumois');
 		expect([301, 308]).toContain(response.status);
+	});
+
+	it('les anciennes routes oubliées sont maintenant servies par Next.js', async () => {
+		for (const [path, texte] of [
+			['/collaborer', 'Collaborer avec SaaSpasse.'],
+			['/employeur-premium', 'Employeur premium.'],
+		] as const) {
+			const response = await get(path);
+			expect(response.status).toBe(200);
+			expect(await response.text()).toContain(texte);
+		}
+	});
+
+	it('une route inconnue retourne le vrai 404 Next.js', async () => {
+		const response = await get('/ce-chemin-n-existe-vraiment-pas');
+		expect(response.status).toBe(404);
+		expect(response.headers.get('x-vercel-id')).toBeTruthy();
+	});
+
+	it('robots et sitemap viennent de Next.js', async () => {
+		const robots = await get('/robots.txt');
+		expect(robots.status).toBe(200);
+		expect(await robots.text()).toContain('Sitemap: https://saaspasse.com/sitemap.xml');
+
+		const sitemap = await get('/sitemap.xml');
+		expect(sitemap.status).toBe(200);
+		const xml = await sitemap.text();
+		expect(xml).toContain('<loc>https://saaspasse.com/startups</loc>');
+		expect(xml).not.toContain('weweb');
 	});
 });
