@@ -19,10 +19,17 @@ export default {
         : url.pathname;
     const redirectTarget = (redirects as Record<string, string>)[normalizedPath];
     if (redirectTarget) {
-      const target = redirectTarget.startsWith("http")
+      const targetBase = redirectTarget.startsWith("http")
         ? redirectTarget
         : `${canonicalDomain}${redirectTarget}`;
-      return Response.redirect(target, 301);
+      const targetUrl = new URL(targetBase);
+      // Les liens historiques circulent encore dans les campagnes et les
+      // infolettres. Conserver leurs UTM évite de perdre l'attribution lors du
+      // 301 vers la route actuelle.
+      for (const [key, value] of url.searchParams) {
+        targetUrl.searchParams.append(key, value);
+      }
+      return Response.redirect(targetUrl.toString(), 301);
     }
 
     // Next.js est configuré sans trailing slash. Un 301 au bord évite un

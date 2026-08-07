@@ -34,6 +34,14 @@ describe('Routeur Next.js', () => {
 		expect([301, 308]).toContain(response.status);
 	});
 
+	it('les redirections historiques conservent les paramètres de campagne', async () => {
+		const response = await get('/certification-employeur-certifie?utm_source=infolettre&utm_campaign=sortie-weweb');
+		expect(response.status).toBe(301);
+		expect(response.headers.get('location')).toBe(
+			'https://saaspasse.com/certification-employeur?utm_source=infolettre&utm_campaign=sortie-weweb'
+		);
+	});
+
 	it('les anciennes routes oubliées sont maintenant servies par Next.js', async () => {
 		for (const [path, texte] of [
 			['/collaborer', 'Collaborer avec SaaSpasse.'],
