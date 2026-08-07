@@ -11,11 +11,11 @@ export const redirects = {
   "/episode/episode-13-isaac-souweine--ai--saas-vertical": "/episode/episode-13-isaac-souweine-ai-saas-vertical",
   "/episode/episode-16-stephane-guerin--12-annees-de-saas": "/episode/episode-16-stephane-guerin-12-annees-de-saas",
   "/episode/episode-10-mathieu-dumont--acquisitions--leadership": "/episode/episode-10-mathieu-dumont-acquisitions-leadership",
-  "/jameo": "/partenaires/jameo",
-  "/modif-saas-new": "/modif-saas",
+  "/jameo": "/startups/jameo",
+  "/modif-saas-new": "/dashboard/saas",
   "/episode/episode-29-reset-refact-reshapeup": "/episode/episode-29-vieux-codebase-renover-ou-rebatir",
   "/episode/episode-20-julien-gobeil-simard--croissance--innovation": "/episode/episode-20-julien-gobeil-simard-croissance-innovation",
-  "/retraites": "https://gamma.app/public/SaaSpasse-au-chalet-Retraites-privees-2024-6pkexpsl9ysvxqj",
+  "/retraites": "/",
   "/startups/fa": "/startups/fanstories",
   "/saas-emplois": "/emplois",
   "/episode/episode-14-matthieu-chartier--science-as-a-service": "/episode/episode-14-matthieu-chartier-science-as-a-service",
@@ -23,7 +23,7 @@ export const redirects = {
   "/glossaire": "/glossaire-saas",
   "/partenaires/coveo": "/partenaires",
   "/episode/episode-50-francois-xavier-ratte-de-saas-a-mars": "/podcast",
-  "/emploi/dev-front-end-full-stack": "/emploi/sofistic-ai-dev-front-end-full-stack",
+  "/emploi/dev-front-end-full-stack": "/emplois",
 };
 
 export const config = {

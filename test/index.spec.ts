@@ -42,6 +42,19 @@ describe('Routeur Next.js', () => {
 		);
 	});
 
+	it('les anciennes destinations retirées mènent vers une page utile', async () => {
+		for (const [source, destination] of [
+			['/jameo', 'https://saaspasse.com/startups/jameo'],
+			['/modif-saas-new', 'https://saaspasse.com/dashboard/saas'],
+			['/emploi/dev-front-end-full-stack', 'https://saaspasse.com/emplois'],
+			['/retraites', 'https://saaspasse.com/'],
+		] as const) {
+			const response = await get(source);
+			expect(response.status).toBe(301);
+			expect(response.headers.get('location')).toBe(destination);
+		}
+	});
+
 	it('les anciennes routes oubliées sont maintenant servies par Next.js', async () => {
 		for (const [path, texte] of [
 			['/collaborer', 'Collaborer avec SaaSpasse.'],
