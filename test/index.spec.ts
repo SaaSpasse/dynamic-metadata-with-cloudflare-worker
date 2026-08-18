@@ -55,6 +55,32 @@ describe('Routeur Next.js', () => {
 		}
 	});
 
+	it('les fiches consolidées redirigent vers leur fiche canonique', async () => {
+		for (const [source, destination] of [
+			['/startups/billdr-pro', 'https://saaspasse.com/startups/billdr'],
+			['/startups/billdr-pro/reclamer', 'https://saaspasse.com/startups/billdr/reclamer'],
+			['/startups/intelligence-node-canada', 'https://saaspasse.com/startups/node'],
+			[
+				'/startups/intelligence-node-canada/reclamer',
+				'https://saaspasse.com/startups/node/reclamer',
+			],
+			['/startups/ticksmith', 'https://saaspasse.com/startups/revelate'],
+			['/startups/ticksmith/reclamer', 'https://saaspasse.com/startups/revelate/reclamer'],
+		] as const) {
+			const response = await get(source);
+			expect(response.status).toBe(301);
+			expect(response.headers.get('location')).toBe(destination);
+		}
+	});
+
+	it('une ancienne fiche avec slash et UTM garde une URL canonique attribuable', async () => {
+		const response = await get('/startups/billdr-pro/?utm_source=ancien-lien');
+		expect(response.status).toBe(301);
+		expect(response.headers.get('location')).toBe(
+			'https://saaspasse.com/startups/billdr?utm_source=ancien-lien'
+		);
+	});
+
 	it('les anciennes routes oubliées sont maintenant servies par Next.js', async () => {
 		for (const [path, texte] of [
 			['/collaborer', 'Collaborer avec SaaSpasse.'],
