@@ -17,6 +17,14 @@ export const redirects = {
   "/episode/episode-20-julien-gobeil-simard--croissance--innovation": "/episode/episode-20-julien-gobeil-simard-croissance-innovation",
   "/retraites": "/",
   "/startups/fa": "/startups/fanstories",
+  // Fiches consolidées dans le répertoire: garder les anciens liens et les
+  // parcours de réclamation fonctionnels après la dépublication des doublons.
+  "/startups/billdr-pro": "/startups/billdr",
+  "/startups/billdr-pro/reclamer": "/startups/billdr/reclamer",
+  "/startups/intelligence-node-canada": "/startups/node",
+  "/startups/intelligence-node-canada/reclamer": "/startups/node/reclamer",
+  "/startups/ticksmith": "/startups/revelate",
+  "/startups/ticksmith/reclamer": "/startups/revelate/reclamer",
   "/saas-emplois": "/emplois",
   "/episode/episode-14-matthieu-chartier--science-as-a-service": "/episode/episode-14-matthieu-chartier-science-as-a-service",
   "/episode/episode-18-antoine-bisson--moderniser-lusine": "/episode/episode-18-antoine-bisson-moderniser-lusine",
