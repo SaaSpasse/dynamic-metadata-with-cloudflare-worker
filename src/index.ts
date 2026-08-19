@@ -1,11 +1,49 @@
 import { appOrigin, canonicalDomain, redirects } from "../config.js";
 
+const ORIGIN_SECRET_HEADER = "x-saaspasse-origin-secret";
+const PUBLIC_HOST_HEADER = "x-saaspasse-public-host";
+const PUBLIC_HOSTS = new Set([
+  "saaspasse.com",
+  "www.saaspasse.com",
+  "app.saaspasse.com",
+]);
+const ORIGIN_SECRET_PATTERN = /^[\x21-\x7e]{32,256}$/;
+
+export function createOriginRequest(
+  request: Request,
+  target: string,
+  publicHost: string,
+  originSecret?: string
+) {
+  const proxied = new Request(target, request);
+  proxied.headers.set("x-forwarded-host", publicHost);
+  proxied.headers.set("x-forwarded-proto", "https");
+
+  // Un visiteur peut fournir ces headers à l'entrée. Toujours les retirer,
+  // puis les recréer ensemble uniquement depuis request.url et le binding
+  // secret du Worker. Vercel écrasera x-forwarded-host, mais conservera ces
+  // deux headers réservés pour la preuve d'origine côté application.
+  proxied.headers.delete(ORIGIN_SECRET_HEADER);
+  proxied.headers.delete(PUBLIC_HOST_HEADER);
+  const secret = originSecret?.trim() ?? "";
+  const normalizedPublicHost = publicHost.trim().toLowerCase();
+  if (
+    request.method === "POST" &&
+    ORIGIN_SECRET_PATTERN.test(secret) &&
+    PUBLIC_HOSTS.has(normalizedPublicHost)
+  ) {
+    proxied.headers.set(ORIGIN_SECRET_HEADER, secret);
+    proxied.headers.set(PUBLIC_HOST_HEADER, normalizedPublicHost);
+  }
+  return proxied;
+}
+
 // Routeur edge SaaSpasse. Depuis la sortie complète de WeWeb (7 août 2026),
 // Next.js est l'origine unique: le Worker conserve seulement le domaine
 // public, les redirects historiques et la normalisation des trailing slashes.
 
 export default {
-  async fetch(request: Request): Promise<Response> {
+  async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
     // Les alias historiques ont une seule forme canonique.
@@ -46,9 +84,12 @@ export default {
     }
 
     const target = `${appOrigin}${url.pathname}${url.search}`;
-    const proxied = new Request(target, request);
-    proxied.headers.set("x-forwarded-host", url.host);
-    proxied.headers.set("x-forwarded-proto", "https");
-    return fetch(proxied);
+    const proxied = createOriginRequest(
+      request,
+      target,
+      url.hostname,
+      env.SAASPASSE_WORKER_ORIGIN_SECRET
+    );
+    return fetch(proxied, { redirect: "manual" });
   },
 };

@@ -3,17 +3,18 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "deploy": "wrangler deploy",
+    "check": "npm test -- --run && tsc --noEmit && wrangler types --include-runtime false --check && npm audit --audit-level=high",
+    "upload:candidate": "wrangler versions upload",
     "dev": "wrangler dev",
     "start": "wrangler dev",
     "test": "vitest",
-    "cf-typegen": "wrangler types"
+    "cf-typegen": "wrangler types --include-runtime false"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.1.0",
-    "@cloudflare/workers-types": "^4.20240419.0",
-    "typescript": "^5.0.4",
-    "vitest": "1.3.0",
-    "wrangler": "^4.64.0"
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "@cloudflare/workers-types": "^5.20260819.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11",
+    "wrangler": "^4.124.0"
   }
 }
