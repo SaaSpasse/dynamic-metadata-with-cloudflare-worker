@@ -4,6 +4,12 @@ main = "src/index.ts"
 compatibility_date = "2024-04-19"
 compatibility_flags = ["nodejs_compat"]
 
+# Le routeur ne doit jamais être publié sans la preuve d'origine qui permet à
+# Vercel de distinguer Cloudflare d'un appel direct forgé. Provisionner ce
+# secret sur une Version, puis promouvoir cette Version de façon contrôlée.
+[secrets]
+required = ["SAASPASSE_WORKER_ORIGIN_SECRET"]
+
 # Variable bindings. These are arbitrary, plaintext strings (similar to environment variables)
 # Docs:
 # - https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables

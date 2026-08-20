@@ -1,10 +1,60 @@
 // test/index.spec.ts — routeur edge post-WeWeb.
-// Les fetches vers Vercel sont réels: tests d'intégration légers.
+// Toute sortie Vercel est simulée : la CI ne dépend jamais de la production.
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
-import { describe, it, expect } from 'vitest';
-import worker from '../src/index';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
+import worker, { createOriginRequest } from '../src/index';
 
 const IncomingRequest = Request<unknown, IncomingRequestCfProperties>;
+const originFetch = vi.fn<typeof fetch>();
+let lastOriginRequest: Request | null = null;
+let lastOriginInit: RequestInit | undefined;
+
+beforeEach(() => {
+	originFetch.mockImplementation(async (input, init) => {
+		const request = new Request(input, init);
+		lastOriginRequest = request.clone();
+		lastOriginInit = init;
+		const url = new URL(request.url);
+		expect(url.origin).toBe('https://saaspasse-v3.vercel.app');
+
+		switch (url.pathname) {
+			case '/':
+				return new Response('<html data-theme="dark"><div class="home-hero"></div></html>');
+			case '/lajobdumois':
+				return new Response(null, {
+					status: 308,
+					headers: { location: 'https://saaspasse.com/emplois' },
+				});
+			case '/collaborer':
+				return new Response('Collaborer avec SaaSpasse.');
+			case '/employeur-premium':
+				return new Response('Employeur premium.');
+			case '/ce-chemin-n-existe-vraiment-pas':
+				return new Response('Introuvable', {
+					status: 404,
+					headers: { 'x-vercel-id': 'fixture::worker-test' },
+				});
+			case '/robots.txt':
+				return new Response('Sitemap: https://saaspasse.com/sitemap.xml');
+			case '/sitemap.xml':
+				return new Response(
+					'<urlset><url><loc>https://saaspasse.com/startups</loc></url></urlset>'
+				);
+			case '/infolettre':
+				return new Response(null, { status: 204 });
+			default:
+				throw new Error(`unexpected_origin_path:${url.pathname}`);
+		}
+	});
+	vi.stubGlobal('fetch', originFetch);
+});
+
+afterEach(() => {
+	vi.unstubAllGlobals();
+	originFetch.mockReset();
+	lastOriginRequest = null;
+	lastOriginInit = undefined;
+});
 
 async function get(path: string): Promise<Response> {
 	const request = new IncomingRequest(`https://saaspasse.com${path}`, { redirect: 'manual' });
@@ -15,6 +65,91 @@ async function get(path: string): Promise<Response> {
 }
 
 describe('Routeur Next.js', () => {
+	it('retire tout header origine entrant et ajoute seulement un binding secret valide', () => {
+		const incoming = new IncomingRequest('https://saaspasse.com/infolettre', {
+			method: 'POST',
+			headers: {
+				'x-saaspasse-origin-secret': 'valeur-forgee-par-un-client',
+				'x-saaspasse-public-host': 'hote-forge.example',
+			},
+		});
+		const withoutBinding = createOriginRequest(
+			incoming,
+			'https://saaspasse-v3.vercel.app/infolettre',
+			'saaspasse.com'
+		);
+		expect(withoutBinding.headers.get('x-saaspasse-origin-secret')).toBeNull();
+		expect(withoutBinding.headers.get('x-saaspasse-public-host')).toBeNull();
+
+		const withInvalidBinding = createOriginRequest(
+			incoming,
+			'https://saaspasse-v3.vercel.app/infolettre',
+			'saaspasse.com',
+			'secret avec espaces interdit 000000000001'
+		);
+		expect(withInvalidBinding.headers.get('x-saaspasse-origin-secret')).toBeNull();
+		expect(withInvalidBinding.headers.get('x-saaspasse-public-host')).toBeNull();
+
+		const secret = 'worker-origin-secret-fixture-0000000001';
+		const withBinding = createOriginRequest(
+			incoming,
+			'https://saaspasse-v3.vercel.app/infolettre',
+			'saaspasse.com',
+			secret
+		);
+		expect(withBinding.headers.get('x-saaspasse-origin-secret')).toBe(secret);
+		expect(withBinding.headers.get('x-saaspasse-public-host')).toBe('saaspasse.com');
+
+		const getRequest = new IncomingRequest('https://saaspasse.com/infolettre', {
+			headers: {
+				'x-saaspasse-origin-secret': 'valeur-forgee-par-un-client',
+				'x-saaspasse-public-host': 'saaspasse.com',
+			},
+		});
+		const proxiedGet = createOriginRequest(
+			getRequest,
+			'https://saaspasse-v3.vercel.app/infolettre',
+			'saaspasse.com',
+			secret
+		);
+		expect(proxiedGet.headers.get('x-saaspasse-origin-secret')).toBeNull();
+		expect(proxiedGet.headers.get('x-saaspasse-public-host')).toBeNull();
+	});
+
+	it('relaie un POST avec les preuves recréées et le corps intact', async () => {
+		const secret = 'worker-origin-secret-fixture-0000000001';
+		const request = new IncomingRequest('https://saaspasse.com/infolettre', {
+			method: 'POST',
+			headers: {
+				'content-type': 'application/x-www-form-urlencoded',
+				'x-saaspasse-origin-secret': 'valeur-forgee-par-un-client',
+				'x-saaspasse-public-host': 'hote-forge.example',
+			},
+			body: 'email=fixture%40example.test',
+		});
+		const ctx = createExecutionContext();
+		const response = await worker.fetch(
+			request,
+			{ ...env, SAASPASSE_WORKER_ORIGIN_SECRET: secret },
+			ctx
+		);
+		await waitOnExecutionContext(ctx);
+
+		expect(response.status).toBe(204);
+		expect(originFetch).toHaveBeenCalledTimes(1);
+		expect(lastOriginRequest).not.toBeNull();
+		const proxied = lastOriginRequest!;
+		expect(proxied.headers.get('x-saaspasse-origin-secret')).toBe(secret);
+		expect(proxied.headers.get('x-saaspasse-public-host')).toBe('saaspasse.com');
+		expect(proxied.headers.get('content-type')).toContain(
+			'application/x-www-form-urlencoded'
+		);
+		expect(new TextDecoder().decode(await proxied.arrayBuffer())).toBe(
+			'email=fixture%40example.test'
+		);
+		expect(lastOriginInit).toMatchObject({ redirect: 'manual' });
+	});
+
 	it('la home est servie par Next.js', async () => {
 		const response = await get('/');
 		expect(response.status).toBe(200);

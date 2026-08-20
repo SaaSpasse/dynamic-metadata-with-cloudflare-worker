@@ -1,18 +1,243 @@
-name: Deploy Worker
+name: Worker release
 
 on:
+  pull_request:
   push:
     branches: [master]
-  repository_dispatch:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "stage = 0 % pour canari, promote = 100 %, rollback = retour connu"
+        required: true
+        type: choice
+        options:
+          - stage
+          - promote
+          - rollback
+      version_id:
+        description: "Cloudflare Worker Version UUID déjà validé"
+        required: true
+        type: string
+      previous_version_id:
+        description: "Version actuellement stable (obligatoire pour stage/promote)"
+        required: false
+        type: string
+      release_sha:
+        description: "SHA Git exact de la Version (vide seulement pour le rollback legacy épinglé)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: worker-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  validate-and-upload:
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v3
-      - name: Build & Deploy Worker
-        uses: cloudflare/wrangler-action@v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          apiToken: ${{ secrets.CF_API_TOKEN }}
-          accountId: ${{ secrets.CF_ACCOUNT_ID }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Tests Worker
+        run: npm test -- --run
+      - name: TypeScript et bindings générés
+        run: |
+          npx tsc --noEmit
+          npx wrangler types --include-runtime false --check
+      - name: Audit dépendances
+        run: npm audit --audit-level=high
+  upload-candidate:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: validate-and-upload
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Charger une Version candidate non active
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          npx wrangler versions upload --message "git:$GITHUB_SHA"
+
+  promote:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    env:
+      OPERATION: ${{ inputs.operation }}
+      WORKER_VERSION_ID: ${{ inputs.version_id }}
+      PREVIOUS_VERSION_ID: ${{ inputs.previous_version_id }}
+      RELEASE_SHA: ${{ inputs.release_sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: Valider la cible immuable sans secret
+        shell: bash
+        run: |
+          [[ "$WORKER_VERSION_ID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]
+          case "$OPERATION" in
+            stage|promote)
+              [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+              [[ "$PREVIOUS_VERSION_ID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]
+              git cat-file -e "$RELEASE_SHA^{commit}"
+              git merge-base --is-ancestor "$RELEASE_SHA" "$GITHUB_SHA"
+              git checkout --detach "$RELEASE_SHA"
+              ;;
+            rollback)
+              test -z "$PREVIOUS_VERSION_ID"
+              if [[ -n "$RELEASE_SHA" ]]; then
+                [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+                git cat-file -e "$RELEASE_SHA^{commit}"
+                git merge-base --is-ancestor "$RELEASE_SHA" "$GITHUB_SHA"
+              fi
+              ;;
+            *) exit 1 ;;
+          esac
+      - run: npm ci
+      - name: Revalider exactement le code à promouvoir
+        if: inputs.operation != 'rollback'
+        run: |
+          npm test -- --run
+          npx tsc --noEmit
+          npx wrangler types --include-runtime false --check
+          npm audit --audit-level=high
+      - name: Vérifier que la Version provient du SHA courant
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          npx wrangler versions view "$WORKER_VERSION_ID" --json > "$RUNNER_TEMP/worker-version.json"
+          node - "$RUNNER_TEMP/worker-version.json" "$WORKER_VERSION_ID" "$OPERATION" "$RELEASE_SHA" ".github/worker-release-baselines.json" <<'NODE'
+          const fs = require('node:fs')
+          const value = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
+          const targetId = process.argv[3]
+          const operation = process.argv[4]
+          const releaseSha = process.argv[5]
+          const baselines = JSON.parse(fs.readFileSync(process.argv[6], 'utf8'))
+          if (value.id !== targetId) throw new Error('worker_version_id_mismatch')
+
+          const marker = releaseSha ? `git:${releaseSha}` : null
+          const exactMessage = value.annotations?.['workers/message']
+          const bindings = Array.isArray(value.resources?.bindings)
+            ? value.resources.bindings
+            : []
+          const originBindings = bindings.filter(
+            (binding) =>
+              binding?.name === 'SAASPASSE_WORKER_ORIGIN_SECRET' &&
+              binding?.type === 'secret_text'
+          )
+          const annotatedCandidate =
+            marker !== null && exactMessage === marker && originBindings.length === 1
+
+          if (operation !== 'rollback') {
+            if (!annotatedCandidate) throw new Error('worker_version_attestation_mismatch')
+            process.exit(0)
+          }
+
+          const legacy = baselines.legacy_rollback_versions?.find(
+            (entry) => entry.version_id === targetId
+          )
+          const legacyMatches =
+            releaseSha === '' &&
+            legacy?.script_etag === value.resources?.script?.etag
+          if (!annotatedCandidate && !legacyMatches) {
+            throw new Error('worker_rollback_attestation_mismatch')
+          }
+          NODE
+      - name: Vérifier l'état courant avant stage ou promotion
+        if: inputs.operation != 'rollback'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          npx wrangler deployments status --json > "$RUNNER_TEMP/worker-deployment.json"
+          node - "$RUNNER_TEMP/worker-deployment.json" "$PREVIOUS_VERSION_ID" "$WORKER_VERSION_ID" "$OPERATION" <<'NODE'
+          const fs = require('node:fs')
+          const value = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
+          const previous = process.argv[3]
+          const candidate = process.argv[4]
+          const operation = process.argv[5]
+          const versions = Array.isArray(value.versions) ? value.versions : []
+          const previousState = versions.find((item) => item.version_id === previous)
+          const candidateState = versions.find((item) => item.version_id === candidate)
+          if (previousState?.percentage !== 100) {
+            throw new Error('stable_worker_version_not_at_100_percent')
+          }
+          if (operation === 'stage' && candidateState && candidateState.percentage !== 0) {
+            throw new Error('candidate_already_receives_traffic')
+          }
+          if (operation === 'promote' && candidateState?.percentage !== 0) {
+            throw new Error('candidate_not_staged_for_override_canary')
+          }
+          NODE
+      - name: Ajouter le candidat à 0 % pour le canari Version Override
+        if: inputs.operation == 'stage'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+        run: >-
+          npx wrangler versions deploy
+          "$PREVIOUS_VERSION_ID@100%"
+          "$WORKER_VERSION_ID@0%"
+          --message "staged-git:$RELEASE_SHA"
+          --yes
+      - name: Promouvoir le candidat canari à 100 %
+        if: inputs.operation == 'promote'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+        run: >-
+          npx wrangler versions deploy
+          "$WORKER_VERSION_ID@100%"
+          --message "approved-git:$RELEASE_SHA"
+          --yes
+      - name: Revenir à une Version antérieure connue
+        if: inputs.operation == 'rollback'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          if [[ -n "$RELEASE_SHA" ]]; then
+            rollback_message="rollback-git:$RELEASE_SHA"
+          else
+            rollback_message="rollback-legacy-baseline"
+          fi
+          npx wrangler versions deploy \
+            "$WORKER_VERSION_ID@100%" \
+            --message "$rollback_message" \
+            --yes

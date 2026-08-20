@@ -1,0 +1,9 @@
+{
+  "legacy_rollback_versions": [
+    {
+      "version_id": "087e8d4e-6e77-40b9-967e-84bf39987165",
+      "script_etag": "d62c660d1a55c006d95e634dd71baeb8461d0cfb2a2ca5bb63d1f03bec79be78",
+      "reason": "Version live pré-origin-auth observée le 2026-08-19; aucune annotation Git historique"
+    }
+  ]
+}
