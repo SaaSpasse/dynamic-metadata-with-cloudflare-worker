@@ -31,8 +31,10 @@ npm run dev
 
 ## Déploiement
 
-Un push sur `master` ne modifie plus le trafic: après les tests, il charge une
-**Version candidate non active** avec le marqueur `git:<SHA>`. Le workflow
+Un push sur `master` ne modifie plus le trafic: après les tests et l'approbation
+de l'environnement GitHub `production`, il charge une **Version candidate non
+active** avec le marqueur `git:<SHA>`. Le jeton Cloudflare reste donc limité à
+cet environnement et n'est jamais exposé aux tests de pull request. Le workflow
 manuel `Worker release` impose ensuite deux opérations séparées:
 
 1. `stage` garde la Version stable à 100 % et ajoute la candidate à 0 %;

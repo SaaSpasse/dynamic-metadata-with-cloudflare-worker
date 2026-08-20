@@ -44,7 +44,8 @@ npm run upload:candidate
 
 - Cloudflare: compte SaaSpasse (`bonjourhi@saaspasse.com`), account ID
   `94914547edc4560d3fcfe3401b0f8cfa`;
-- un push sur `master` valide puis charge une Version non active;
+- un push sur `master` valide, attend l'approbation de l'environnement
+  `production`, puis charge une Version non active;
 - le dispatch `stage` garde l'ancienne Version à 100 % et ajoute la candidate à
   0 % pour le canari Version Override sur le domaine canonique;
 - le dispatch `promote` exige ensuite le UUID candidat, le SHA exact et
