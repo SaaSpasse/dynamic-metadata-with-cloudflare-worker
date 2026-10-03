@@ -1,0 +1,68 @@
+{
+  "operation": "non-active Version upload; no stage or promotion",
+  "candidate": {
+    "id": "c11c9f26-4484-4bdf-8c69-500792db77c8",
+    "created_on": "2026-10-03T02:49:25.691868Z",
+    "annotations": {
+      "workers/message": "git:77e30775c9fe9df09fef3469c0404b797f4b0022",
+      "workers/triggered_by": "version_upload"
+    },
+    "etag": "256866ad79537abd4e72edaa68e00fa27d6a87916da1659a045c95718aa01100",
+    "bindings": [
+      {
+        "name": "SAASPASSE_WORKER_ORIGIN_SECRET",
+        "type": "secret_text"
+      }
+    ],
+    "runtime": {
+      "compatibility_date": "2024-04-19",
+      "compatibility_flags": [
+        "nodejs_compat"
+      ],
+      "usage_model": "standard"
+    }
+  },
+  "deployment_before": {
+    "id": "6c134c72-6a60-403c-8924-b8aaa5f991e5",
+    "source": "wrangler",
+    "strategy": "percentage",
+    "annotations": {
+      "workers/message": "staged-git:fbd1f8f8e5c15ccdcb17a9e35ff3918c2df1da03",
+      "workers/triggered_by": "deployment"
+    },
+    "versions": [
+      {
+        "version_id": "087e8d4e-6e77-40b9-967e-84bf39987165",
+        "percentage": 100
+      },
+      {
+        "version_id": "557906f1-0757-435c-9a7c-09ace09a26f4",
+        "percentage": 0
+      }
+    ],
+    "created_on": "2026-08-20T01:39:14.718884Z"
+  },
+  "deployment_after": {
+    "id": "6c134c72-6a60-403c-8924-b8aaa5f991e5",
+    "source": "wrangler",
+    "strategy": "percentage",
+    "annotations": {
+      "workers/message": "staged-git:fbd1f8f8e5c15ccdcb17a9e35ff3918c2df1da03",
+      "workers/triggered_by": "deployment"
+    },
+    "versions": [
+      {
+        "version_id": "087e8d4e-6e77-40b9-967e-84bf39987165",
+        "percentage": 100
+      },
+      {
+        "version_id": "557906f1-0757-435c-9a7c-09ace09a26f4",
+        "percentage": 0
+      }
+    ],
+    "created_on": "2026-08-20T01:39:14.718884Z"
+  },
+  "active_deployment_unchanged": true,
+  "secret_values": "not read or changed",
+  "binding_observation": "one dormant SAASPASSE_WORKER_ORIGIN_SECRET binding inherited despite empty metadata; no secret/global deletion; exact source guard proves never read"
+}

@@ -1,0 +1,34 @@
+{
+  "worker": "weweb-dynamic-metadata",
+  "release_sha": "77e30775c9fe9df09fef3469c0404b797f4b0022",
+  "release_branch": "codex/catalogue-legacy-redirects-20261002",
+  "baseline_source_sha": "4c736998bc0f1e1c52640919ee0c48d4a4899ef1",
+  "baseline_version_id": "087e8d4e-6e77-40b9-967e-84bf39987165",
+  "baseline_etag": "d62c660d1a55c006d95e634dd71baeb8461d0cfb2a2ca5bb63d1f03bec79be78",
+  "candidate_version_id": "c11c9f26-4484-4bdf-8c69-500792db77c8",
+  "candidate_etag": "256866ad79537abd4e72edaa68e00fa27d6a87916da1659a045c95718aa01100",
+  "compatibility_date": "2024-04-19",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "expected_candidate_bindings": [
+    {
+      "name": "SAASPASSE_WORKER_ORIGIN_SECRET",
+      "type": "secret_text"
+    }
+  ],
+  "binding_usage": "dormant; legacy source never reads env or origin secret, proven by fixed SHA/source hashes and exact comparison outside catalogue block",
+  "source_hashes": {
+    "src/index.ts": "21ae118acb9715c248e1d0a3d121caab13c493f6f394c17d459538ec3846bb3d",
+    "config.js": "729c1afd3034ec79ce4dca36bf9882cbeb994abd33878fe029fbfa6a84920248",
+    "wrangler.toml": "27ea4f21f81fdace0bba1ee0b6016600c73b6f427cab76349801345443922e4b",
+    "wrangler.catalogue-legacy.toml": "4e61cbec8767a6a39e9acded9b1204b2deb8cf4b3bada8e3acccfeb3f856a268",
+    "package.json": "bbe8b6c6205e9119447974f0ef6141400aa544c9e05de1f620df59b382da9106",
+    "package-lock.json": "de6eca796e8d352cf72b760e633530c7cc7e3c33bc60ce3351df6b183f60a33b",
+    "tsconfig.json": "a011ce5d75cd4db04453f793d6488232ce1b28fdf7a962843baf8443ffbf2a2c",
+    "vitest.config.mts": "e932ab92e1f43efd46a9b61a1b78d9d8d74efa1cc9fdd4b96e2d4388fedaf0a9",
+    "worker-configuration.d.ts": "167c035cdbe65e17d55fb3e7aa53db8ca3d7a6fa7288d9e0024c05fc5f279195",
+    "test/index.spec.ts": "36518991dfa4dc526c262bec94f211d5733661b2c4e053299fb737069f7c7f1e",
+    "scripts/check-legacy-scope.mjs": "664bda86026eaffc62cd0e7a921890a2029bdd22a9bc7d6b9143c45513543e51"
+  }
+}

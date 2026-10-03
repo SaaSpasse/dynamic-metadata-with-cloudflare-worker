@@ -57,12 +57,17 @@ jobs:
           npx wrangler types --include-runtime false --check
       - name: Audit dépendances
         run: npm audit --audit-level=high
+      - name: Politique bornée catalogue legacy et canari
+        run: node --test scripts/catalogue-legacy-policy.check.mjs scripts/catalogue-legacy-canary.check.mjs
   upload-candidate:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     needs: validate-and-upload
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: production
+    concurrency:
+      group: worker-production-release
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -87,6 +92,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: production
+    concurrency:
+      group: worker-production-release
+      cancel-in-progress: false
     env:
       OPERATION: ${{ inputs.operation }}
       WORKER_VERSION_ID: ${{ inputs.version_id }}

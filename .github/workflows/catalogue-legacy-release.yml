@@ -1,0 +1,110 @@
+name: Catalogue legacy release
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "stage 0%, promote après canari, rollback baseline"
+        required: true
+        type: choice
+        options: [stage, promote, rollback]
+      release_sha:
+        description: "SHA exact épinglé dans le manifeste revu"
+        required: true
+        type: string
+      version_id:
+        description: "UUID candidat exact épinglé dans le manifeste revu"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate-legacy-policy:
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22
+      - run: node --test scripts/catalogue-legacy-policy.check.mjs scripts/catalogue-legacy-canary.check.mjs
+
+  release:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    concurrency:
+      group: worker-production-release
+      cancel-in-progress: false
+    env:
+      OPERATION: ${{ inputs.operation }}
+      RELEASE_SHA: ${{ inputs.release_sha }}
+      WORKER_VERSION_ID: ${{ inputs.version_id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22
+          cache: npm
+      - name: Garder la politique approuvée de master et vérifier la source publiée
+        shell: bash
+        run: |
+          cp .github/catalogue-legacy-release.json "$RUNNER_TEMP/catalogue-manifest.json"
+          cp scripts/catalogue-legacy-gate.mjs "$RUNNER_TEMP/catalogue-gate.mjs"
+          cp scripts/catalogue-legacy-canary.mjs "$RUNNER_TEMP/catalogue-canary.mjs"
+          node "$RUNNER_TEMP/catalogue-gate.mjs" source "$RUNNER_TEMP/catalogue-manifest.json" "$OPERATION" "$RELEASE_SHA" "$WORKER_VERSION_ID"
+          git merge-base --is-ancestor "$RELEASE_SHA" refs/remotes/origin/codex/catalogue-legacy-redirects-20261002
+          git checkout --detach "$RELEASE_SHA"
+      - run: npm ci
+      - name: Revalider exactement le routeur legacy proposé
+        if: inputs.operation != 'rollback'
+        run: npm run check
+      - name: Attester les deux versions et l'état du trafic avant mutation
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          npx wrangler versions view "$WORKER_VERSION_ID" --json > "$RUNNER_TEMP/candidate.json"
+          npx wrangler versions view 087e8d4e-6e77-40b9-967e-84bf39987165 --json > "$RUNNER_TEMP/baseline.json"
+          npx wrangler deployments status --json > "$RUNNER_TEMP/deployment-before.json"
+          node "$RUNNER_TEMP/catalogue-gate.mjs" attest "$RUNNER_TEMP/catalogue-manifest.json" "$OPERATION" "$RELEASE_SHA" "$WORKER_VERSION_ID" "$RUNNER_TEMP/candidate.json" "$RUNNER_TEMP/baseline.json" "$RUNNER_TEMP/deployment-before.json"
+      - name: Canari canonique obligatoire avant promotion
+        if: inputs.operation == 'promote'
+        run: node "$RUNNER_TEMP/catalogue-canary.mjs" "$RUNNER_TEMP/catalogue-manifest.json"
+      - name: Appliquer seulement l'opération approuvée
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          npx wrangler deployments status --json > "$RUNNER_TEMP/deployment-immediate.json"
+          node "$RUNNER_TEMP/catalogue-gate.mjs" attest "$RUNNER_TEMP/catalogue-manifest.json" "$OPERATION" "$RELEASE_SHA" "$WORKER_VERSION_ID" "$RUNNER_TEMP/candidate.json" "$RUNNER_TEMP/baseline.json" "$RUNNER_TEMP/deployment-immediate.json"
+          case "$OPERATION" in
+            stage)
+              npx wrangler versions deploy "087e8d4e-6e77-40b9-967e-84bf39987165@100%" "$WORKER_VERSION_ID@0%" --message "staged-catalogue-legacy:git:$RELEASE_SHA" --yes
+              ;;
+            promote)
+              npx wrangler versions deploy "$WORKER_VERSION_ID@100%" --message "approved-catalogue-legacy:git:$RELEASE_SHA" --yes
+              ;;
+            rollback)
+              npx wrangler versions deploy "087e8d4e-6e77-40b9-967e-84bf39987165@100%" --message "rollback-catalogue-legacy" --yes
+              ;;
+            *) exit 1 ;;
+          esac
+          npx wrangler deployments status --json > "$RUNNER_TEMP/deployment-after.json"
+          node "$RUNNER_TEMP/catalogue-gate.mjs" after "$RUNNER_TEMP/catalogue-manifest.json" "$OPERATION" "$RELEASE_SHA" "$WORKER_VERSION_ID" "$RUNNER_TEMP/deployment-after.json"
