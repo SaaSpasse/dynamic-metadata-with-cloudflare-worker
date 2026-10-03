@@ -8,6 +8,26 @@ export default {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
 
+    // BEGIN catalogue-certification-only
+    // Composer seulement ces deux aliases avant l'hôte/slash; tous les autres
+    // chemins et le proxy gardent exactement le comportement de la version live.
+    let certificationPath = url.pathname;
+    try {
+      certificationPath = decodeURIComponent(certificationPath);
+    } catch {
+      // Un encodage invalide conserve le chemin brut.
+    }
+    if (certificationPath.endsWith("/")) certificationPath = certificationPath.slice(0, -1);
+    if (
+      certificationPath === "/certification-employeur" ||
+      certificationPath === "/certification-employeur-certifie"
+    ) {
+      const destination = new URL(`${canonicalDomain}/certification#employeurs`);
+      for (const [key, value] of url.searchParams) destination.searchParams.append(key, value);
+      return Response.redirect(destination.toString(), 301);
+    }
+    // END catalogue-certification-only
+
     // Les alias historiques ont une seule forme canonique.
     if (url.hostname === "www.saaspasse.com" || url.hostname === "app.saaspasse.com") {
       return Response.redirect(`${canonicalDomain}${url.pathname}${url.search}`, 301);

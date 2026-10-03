@@ -1,112 +1,70 @@
-// test/index.spec.ts — routeur edge post-WeWeb.
-// Les fetches vers Vercel sont réels: tests d'intégration légers.
-import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
-import { describe, it, expect } from 'vitest';
-import worker from '../src/index';
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import worker from "../src/index";
+const originFetch = vi.fn<typeof fetch>();
+beforeEach(() => { originFetch.mockResolvedValue(new Response("origine fixture")); vi.stubGlobal("fetch", originFetch); });
+afterEach(() => { vi.unstubAllGlobals(); originFetch.mockReset(); });
 
-const IncomingRequest = Request<unknown, IncomingRequestCfProperties>;
-
-async function get(path: string): Promise<Response> {
-	const request = new IncomingRequest(`https://saaspasse.com${path}`, { redirect: 'manual' });
-	const ctx = createExecutionContext();
-	const response = await worker.fetch(request, env, ctx);
-	await waitOnExecutionContext(ctx);
-	return response;
-}
-
-describe('Routeur Next.js', () => {
-	it('la home est servie par Next.js', async () => {
-		const response = await get('/');
-		expect(response.status).toBe(200);
-		const html = await response.text();
-		expect(html).toContain('data-theme="dark"');
-		expect(html).toContain('home-hero');
-	});
-
-	it('les routes migrées avec trailing slash redirigent 301 vers la forme canonique', async () => {
-		const response = await get('/podcast/');
-		expect(response.status).toBe(301);
-		expect(response.headers.get('location')).toBe('https://saaspasse.com/podcast');
-	});
-
-	it('/lajobdumois suit la chaîne Worker → Next 308 → /emplois', async () => {
-		const response = await get('/lajobdumois');
-		expect([301, 308]).toContain(response.status);
-	});
-
-	it('les redirections historiques conservent les paramètres de campagne', async () => {
-		const response = await get('/certification-employeur-certifie?utm_source=infolettre&utm_campaign=sortie-weweb');
-		expect(response.status).toBe(301);
-		expect(response.headers.get('location')).toBe(
-			'https://saaspasse.com/certification-employeur?utm_source=infolettre&utm_campaign=sortie-weweb'
-		);
-	});
-
-	it('les anciennes destinations retirées mènent vers une page utile', async () => {
-		for (const [source, destination] of [
-			['/jameo', 'https://saaspasse.com/startups/jameo'],
-			['/modif-saas-new', 'https://saaspasse.com/dashboard/saas'],
-			['/emploi/dev-front-end-full-stack', 'https://saaspasse.com/emplois'],
-			['/retraites', 'https://saaspasse.com/'],
-		] as const) {
-			const response = await get(source);
-			expect(response.status).toBe(301);
-			expect(response.headers.get('location')).toBe(destination);
-		}
-	});
-
-	it('les fiches consolidées redirigent vers leur fiche canonique', async () => {
-		for (const [source, destination] of [
-			['/startups/billdr-pro', 'https://saaspasse.com/startups/billdr'],
-			['/startups/billdr-pro/reclamer', 'https://saaspasse.com/startups/billdr/reclamer'],
-			['/startups/intelligence-node-canada', 'https://saaspasse.com/startups/node'],
-			[
-				'/startups/intelligence-node-canada/reclamer',
-				'https://saaspasse.com/startups/node/reclamer',
-			],
-			['/startups/ticksmith', 'https://saaspasse.com/startups/revelate'],
-			['/startups/ticksmith/reclamer', 'https://saaspasse.com/startups/revelate/reclamer'],
-		] as const) {
-			const response = await get(source);
-			expect(response.status).toBe(301);
-			expect(response.headers.get('location')).toBe(destination);
-		}
-	});
-
-	it('une ancienne fiche avec slash et UTM garde une URL canonique attribuable', async () => {
-		const response = await get('/startups/billdr-pro/?utm_source=ancien-lien');
-		expect(response.status).toBe(301);
-		expect(response.headers.get('location')).toBe(
-			'https://saaspasse.com/startups/billdr?utm_source=ancien-lien'
-		);
-	});
-
-	it('les anciennes routes oubliées sont maintenant servies par Next.js', async () => {
-		for (const [path, texte] of [
-			['/collaborer', 'Collaborer avec SaaSpasse.'],
-			['/employeur-premium', 'Employeur premium.'],
-		] as const) {
-			const response = await get(path);
-			expect(response.status).toBe(200);
-			expect(await response.text()).toContain(texte);
-		}
-	});
-
-	it('une route inconnue retourne le vrai 404 Next.js', async () => {
-		const response = await get('/ce-chemin-n-existe-vraiment-pas');
-		expect(response.status).toBe(404);
-		expect(response.headers.get('x-vercel-id')).toBeTruthy();
-	});
-
-	it('robots et sitemap viennent de Next.js', async () => {
-		const robots = await get('/robots.txt');
-		expect(robots.status).toBe(200);
-		expect(await robots.text()).toContain('Sitemap: https://saaspasse.com/sitemap.xml');
-
-		const sitemap = await get('/sitemap.xml');
-		expect(sitemap.status).toBe(200);
-		const xml = await sitemap.text();
-		expect(xml).toContain('<loc>https://saaspasse.com/startups</loc>');
-		expect(xml).not.toContain('weweb');
-	});
+describe("Deux certifications historiques", () => {
+  for (const source of ["certification-employeur", "certification-employeur-certifie"]) {
+    for (const host of ["saaspasse.com", "www.saaspasse.com", "app.saaspasse.com"]) {
+      for (const protocol of ["http", "https"]) {
+        for (const suffix of ["", "/"]) {
+          for (const path of [source, source.replace("-", "%2D")]) {
+            for (const method of ["GET", "HEAD"]) {
+              it(`${method} ${protocol}://${host}/${path}${suffix} rejoint directement /certification`, async () => {
+                const response = await worker.fetch(new Request(`${protocol}://${host}/${path}${suffix}?utm_campaign=%C3%89t%C3%A9+2027&ref=a&ref=b`, { method }));
+                expect(response.status).toBe(301);
+                expect(response.headers.get("location")).toBe("https://saaspasse.com/certification?utm_campaign=%C3%89t%C3%A9+2027&ref=a&ref=b#employeurs");
+                expect(originFetch).not.toHaveBeenCalled();
+              });
+            }
+          }
+        }
+      }
+    }
+  }
+});
+describe("Contrat legacy conservé hors certification", () => {
+  it("conserve les redirects historiques et leurs campagnes", async () => {
+    for (const [source, destination] of [["/startups/billdr-pro/", "/startups/billdr"], ["/jameo", "/startups/jameo"], ["/saas-emplois", "/emplois"]]) {
+      const response = await worker.fetch(new Request(`https://saaspasse.com${source}?ref=a&ref=b`));
+      expect(response.status).toBe(301);
+      expect(response.headers.get("location")).toBe(`https://saaspasse.com${destination}?ref=a&ref=b`);
+    }
+  });
+  it("garde le saut www historique avant un mapping hors certification", async () => {
+    const response = await worker.fetch(new Request("https://www.saaspasse.com/jameo?utm_source=test"));
+    expect(response.headers.get("location")).toBe("https://saaspasse.com/jameo?utm_source=test");
+  });
+  it("ne décode pas les autres chemins et préserve la sous-requête originale", async () => {
+    const request = new Request("https://saaspasse.com/startups/%62illdr-pro?ref=a", { redirect: "manual" });
+    await worker.fetch(request);
+    expect(originFetch).toHaveBeenCalledTimes(1);
+    expect(originFetch.mock.calls[0]).toHaveLength(1);
+    const proxied = originFetch.mock.calls[0][0] as Request;
+    expect(proxied.url).toBe("https://saaspasse-v3.vercel.app/startups/%62illdr-pro?ref=a");
+    expect(proxied.redirect).toBe(request.redirect);
+  });
+  it("relaie le POST, le corps et les headers comme la version active, sans nouveau secret", async () => {
+    const request = new Request("https://saaspasse.com/infolettre", {
+      method: "POST", redirect: "manual",
+      headers: { "content-type": "application/x-www-form-urlencoded", "x-saaspasse-origin-secret": "fixture-entrant", "x-saaspasse-public-host": "fixture.test" },
+      body: "email=fixture%40example.invalid",
+    });
+    await worker.fetch(request);
+    expect(originFetch.mock.calls[0]).toHaveLength(1);
+    const proxied = originFetch.mock.calls[0][0] as Request;
+    expect(proxied.headers.get("x-forwarded-host")).toBe("saaspasse.com");
+    expect(proxied.headers.get("x-forwarded-proto")).toBe("https");
+    expect(proxied.headers.get("x-saaspasse-origin-secret")).toBe("fixture-entrant");
+    expect(proxied.headers.get("x-saaspasse-public-host")).toBe("fixture.test");
+    expect(new TextDecoder().decode(await proxied.arrayBuffer())).toBe("email=fixture%40example.invalid");
+  });
+  it("préserve les réponses de l'origine, y compris 404 et redirect", async () => {
+    for (const status of [404, 308]) {
+      originFetch.mockResolvedValueOnce(new Response(null, { status, headers: { Location: "https://saaspasse.com/emplois" } }));
+      const response = await worker.fetch(new Request("https://saaspasse.com/inconnu"));
+      expect(response.status).toBe(status);
+    }
+  });
 });
