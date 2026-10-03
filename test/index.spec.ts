@@ -173,7 +173,7 @@ describe('Routeur Next.js', () => {
 		const response = await get('/certification-employeur-certifie?utm_source=infolettre&utm_campaign=sortie-weweb');
 		expect(response.status).toBe(301);
 		expect(response.headers.get('location')).toBe(
-			'https://saaspasse.com/certification-employeur?utm_source=infolettre&utm_campaign=sortie-weweb'
+			'https://saaspasse.com/certification?utm_source=infolettre&utm_campaign=sortie-weweb#employeurs'
 		);
 	});
 
@@ -244,4 +244,25 @@ describe('Routeur Next.js', () => {
 		expect(xml).toContain('<loc>https://saaspasse.com/startups</loc>');
 		expect(xml).not.toContain('weweb');
 	});
+});
+
+describe("Deux certifications historiques", () => {
+  for (const source of ["certification-employeur", "certification-employeur-certifie"]) {
+    for (const host of ["saaspasse.com", "www.saaspasse.com", "app.saaspasse.com"]) {
+      for (const protocol of ["http", "https"]) {
+        for (const suffix of ["", "/"]) {
+          for (const path of [source, source.replace("-", "%2D")]) {
+            for (const method of ["GET", "HEAD"]) {
+              it(`${method} ${protocol}://${host}/${path}${suffix} rejoint directement /certification`, async () => {
+                const response = await worker.fetch(new Request(`${protocol}://${host}/${path}${suffix}?utm_campaign=%C3%89t%C3%A9+2027&ref=a&ref=b`, { method }), env);
+                expect(response.status).toBe(301);
+                expect(response.headers.get("location")).toBe("https://saaspasse.com/certification?utm_campaign=%C3%89t%C3%A9+2027&ref=a&ref=b#employeurs");
+                expect(originFetch).not.toHaveBeenCalled();
+              });
+            }
+          }
+        }
+      }
+    }
+  }
 });

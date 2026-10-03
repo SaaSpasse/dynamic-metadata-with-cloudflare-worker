@@ -1,7 +1,8 @@
 export const canonicalDomain = "https://saaspasse.com";
 
 export const redirects = {
-  "/certification-employeur-certifie": "/certification-employeur",
+  "/certification-employeur": "/certification#employeurs",
+  "/certification-employeur-certifie": "/certification#employeurs",
   "/episode/episode-12-live---charles-ouellet--snipcart-au-passe-present-futur": "/episode/episode-12-live-charles-ouellet-snipcart-au-passe-present-futur",
   "/ajoute-ton-saas": "/ajout-saas",
   "/episode/episode-8-emilie-carignan--gerer-des-humains-projets-et-changements": "/episode/episode-8-emilie-carignan-gerer-des-humains-projets-et-changements",
