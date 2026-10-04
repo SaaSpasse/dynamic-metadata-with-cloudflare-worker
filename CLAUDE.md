@@ -44,17 +44,19 @@ npm run upload:candidate
 
 - Cloudflare: compte SaaSpasse (`bonjourhi@saaspasse.com`), account ID
   `94914547edc4560d3fcfe3401b0f8cfa`;
-- un push sur `master` valide, attend l'approbation de l'environnement
-  `production`, puis charge une Version non active;
+- depuis le 4 octobre 2026, Frank autorise les déploiements de production sans
+  approbation humaine; les tests, canaris et attestations restent obligatoires;
+- un push sur `master` valide puis charge une Version non active dans
+  l'environnement GitHub `production`, sans attente d'approbation;
 - le dispatch `stage` garde l'ancienne Version à 100 % et ajoute la candidate à
   0 % pour le canari Version Override sur le domaine canonique;
-- le dispatch `promote` exige ensuite le UUID candidat, le SHA exact et
-  l'approbation de l'environnement GitHub `production` avant le passage à
-  100 %;
+- le dispatch `promote` exige ensuite le UUID candidat, le SHA exact, les tests
+  verts et le canari canonique validé avant le passage à 100 %;
 - `rollback` n'accepte qu'une Version moderne attestée ou la baseline legacy
   UUID+etag enregistrée dans `.github/worker-release-baselines.json`;
-- avant premier usage, l'environnement `production` doit être limité à
-  `master`, avoir un approbateur humain et un jeton Cloudflare sans droit DNS;
+- l'environnement `production` reste limité à `master`, sans approbateur
+  requis, avec un jeton Cloudflare sans droit DNS; conserver le verrou de
+  concurrence et les contrôles UUID/SHA/etag avant toute mutation;
 - configurer/faire tourner le secret avec `wrangler versions secret put`,
   jamais `wrangler secret put`; Vercel doit être redéployé après toute nouvelle
   valeur;
