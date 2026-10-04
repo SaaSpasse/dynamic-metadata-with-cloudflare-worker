@@ -31,9 +31,11 @@ npm run dev
 
 ## Déploiement
 
-Un push sur `master` ne modifie plus le trafic: après les tests et l'approbation
-de l'environnement GitHub `production`, il charge une **Version candidate non
-active** avec le marqueur `git:<SHA>`. Le jeton Cloudflare reste donc limité à
+Depuis le 4 octobre 2026, Frank autorise les déploiements de production sans
+approbation humaine. Les tests, canaris et attestations restent obligatoires.
+Un push sur `master` ne modifie pas le trafic: après les tests, il charge une
+**Version candidate non active** dans l'environnement GitHub `production`,
+avec le marqueur `git:<SHA>`. Le jeton Cloudflare reste limité à
 cet environnement et n'est jamais exposé aux tests de pull request. Le workflow
 manuel `Worker release` impose ensuite deux opérations séparées:
 
@@ -41,11 +43,14 @@ manuel `Worker release` impose ensuite deux opérations séparées:
 2. après le canari `Version Override` sur `saaspasse.com`, `promote` place la
    candidate à 100 %.
 
-Les deux opérations exigent les UUID stable/candidat, le SHA exact, le binding
-secret attendu et l'approbation de l'environnement GitHub `production`. Avant
-le premier usage, créer cet environnement, le limiter à `master`, ajouter un
-approbateur humain et fournir un jeton Cloudflare limité à l'édition de ce
-Worker (aucun droit DNS).
+Les deux opérations exigent les UUID stable/candidat, le SHA exact, les tests
+verts et le binding secret attendu. Le canari canonique doit réussir avant
+promotion. L'environnement GitHub `production` reste limité à `master`, sans
+approbateur requis, avec un jeton Cloudflare limité à l'édition de ce Worker
+(aucun droit DNS). Le verrou de concurrence et les contrôles de versions et
+de trafic restent actifs. Le workflow `Catalogue legacy release` conserve
+ses attestations spécifiques et son canari automatique; son état publié est
+décrit dans [le runbook catalogue](docs/catalogue-legacy-release-workflow.md).
 
 Pour le premier provisionnement ou une rotation, utiliser
 `wrangler versions secret put SAASPASSE_WORKER_ORIGIN_SECRET`, jamais

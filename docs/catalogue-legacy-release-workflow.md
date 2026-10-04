@@ -1,30 +1,38 @@
 # Publication bornée du catalogue sur le routeur legacy
 
-La production sert encore la baseline legacy à 100 %. Le code origin-auth de
-master reste une candidate distincte non promue. Publier le catalogue doit donc
-porter seulement ses deux redirects sur la source legacy attestée, sans
-introduire origin-auth ni réécrire le proxy.
+Depuis le 4 octobre 2026, la Version catalogue legacy `c11` est active à 100 %.
+La [promotion 37212266475](https://github.com/SaaSpasse/dynamic-metadata-with-cloudflare-worker/actions/runs/37212266475)
+est terminée avec succès. La baseline historique `087` reste le retour arrière
+connu. Le code origin-auth de master demeure une candidate distincte non
+promue : cette publication porte seulement les deux redirects catalogue sur
+la source legacy attestée, sans introduire origin-auth ni réécrire le proxy.
 
-## Identités à revoir
+Frank a autorisé les déploiements de production sans approbation humaine le
+4 octobre. Le réglage `required_reviewers` de l'environnement GitHub
+`production` a été retiré; sa restriction à `master` est conservée. Les tests,
+canaris, attestations et contrôles de trafic restent obligatoires.
+
+## Identités publiées et retour arrière
 
 | Élément | Identité immuable |
 | --- | --- |
 | Source legacy historique | `4c736998bc0f1e1c52640919ee0c48d4a4899ef1` (PR #1) |
-| Version active | `087e8d4e-6e77-40b9-967e-84bf39987165` |
-| Etag active | `d62c660d1a55c006d95e634dd71baeb8461d0cfb2a2ca5bb63d1f03bec79be78` |
+| Version de retour arrière connue | `087e8d4e-6e77-40b9-967e-84bf39987165` |
+| Etag baseline | `d62c660d1a55c006d95e634dd71baeb8461d0cfb2a2ca5bb63d1f03bec79be78` |
 | Branche source publiée | `codex/catalogue-legacy-redirects-20261002` |
 | SHA catalogue legacy | `77e30775c9fe9df09fef3469c0404b797f4b0022` |
-| Version catalogue inactive | `c11c9f26-4484-4bdf-8c69-500792db77c8` |
+| Version catalogue active à 100 % | `c11c9f26-4484-4bdf-8c69-500792db77c8` |
 | Etag catalogue | `256866ad79537abd4e72edaa68e00fa27d6a87916da1659a045c95718aa01100` |
 
 La correspondance source `4c` → Version `087` est une attestation historique du
 runbook, pas une annotation Git native de la Version. Le UUID+etag de cette
 baseline est déjà épinglé dans `.github/worker-release-baselines.json`.
-La candidate catalogue porte l'annotation native `git:77e30775...` complète.
-Le reçu avant/après est dans `catalogue-legacy-candidate-receipt.json` : les
-versions et leur trafic n'ont pas changé lors du chargement inactif.
+La Version catalogue porte l'annotation native `git:77e30775...` complète.
+Le reçu de chargement `catalogue-legacy-candidate-receipt.json` atteste que les
+versions et leur trafic n'avaient pas changé lors du chargement inactif.
+La promotion du 4 octobre a ensuite placé `c11` à 100 %.
 
-La candidate a **un binding secret dormant** hérité. Le paramètre upload qui
+La Version catalogue a **un binding secret dormant** hérité. Le paramètre upload qui
 annonçait des bindings vides dans la documentation du SHA77 n'a pas empêché
 Cloudflare de l'hériter. Le constat réel et la politique approuvée ici font
 foi : aucun secret n'a été lu, effacé ou changé pour fabriquer une parité.
@@ -54,34 +62,38 @@ hors bloc catalogue et les hashes fixes de tous les fichiers concernés.
   200, son canonical exact, l'ancre employeurs et absence de noindex.
 - Le verrou `worker-production-release` est commun aux jobs de mutation des
   deux workflows pour empêcher des opérations GitHub concurrentes.
-- L'environnement `production`, sa restriction `master` et **son approbateur
-  humain** sont conservés. Aucun agent ne doit approuver à la place de Frank.
-  Le jeton n'est accessible qu'aux étapes Cloudflare. Aucune route, DNS ni
-  valeur de secret n'est modifiée.
+- L'environnement `production` et sa restriction `master` sont conservés,
+  sans approbateur requis. Les jobs s'exécutent sans validation humaine; le
+  jeton n'est accessible qu'aux étapes Cloudflare. Aucune route, DNS ni valeur
+  de secret n'est modifiée.
 
-## Procédure concrète après revue et mise en ligne R1
+## Procédure de référence et retour arrière
 
-Cette PR n'est pas elle-même une autorisation de publier. Ne pas fusionner le
-legacy source dans master : cela effacerait le travail origin-auth pending.
-La PR distincte de backport conserve ces aliases dans le futur routeur advanced.
+Les étapes `stage` puis `promote` ont été exécutées pour la Version `c11`.
+La procédure ci-dessous décrit cette transition depuis `087` à 100 %; ne pas
+rejouer `stage` ou `promote` alors que `c11` est déjà active à 100 %.
+Ne pas fusionner la source legacy dans master : cela effacerait le travail
+origin-auth distinct. La PR de backport conserve ces aliases dans le futur
+routeur advanced.
 
-1. Revoir et fusionner le workflow approuvé sur master avec ses checks verts.
-   Le workflow historique pourra demander séparément une approbation pour
-   charger une nouvelle candidate master inactive; cela ne doit pas être
-   confondu avec la publication legacy.
+1. Utiliser le workflow de master avec ses checks verts. Le workflow historique
+   peut charger séparément une nouvelle candidate master inactive, sans
+   approbation humaine; ce chargement ne publie pas la Version legacy.
 2. Après R1 publique, ouvrir Actions → **Catalogue legacy release** → Run
    workflow, sélectionner `master`, `stage`, SHA77 complet et UUIDc11 complet
-   du tableau. Frank approuve le job dans l'environnement `production`.
+   du tableau. Le job s'exécute sans approbation humaine dans `production`.
    Baseline `087` reste à 100 %, candidat `c11` devient 0 % pour le canari.
 3. Revoir le résultat du stage. Dispatcher `promote` avec les mêmes valeurs.
-   Frank approuve de nouveau. Le workflow lance le canari et ne passe à 100 %
-   qu'après sa réussite, puis contrôle l'état réel final.
+   Le workflow lance le canari et ne passe à 100 % qu'après sa réussite, puis
+   contrôle l'état réel final, sans approbation humaine.
 4. Si retour requis, dispatcher `rollback` avec les mêmes SHA/UUID (ce sont
    les identités de cette release, la cible rollback est toujours `087`).
-   L'approbation humaine demeure nécessaire. L'ancien workflow conserve aussi
-   son rollback `087` UUID+etag avec release_sha et previous_version_id vides.
+   Le job s'exécute sans approbation humaine en conservant les attestations.
+   L'ancien workflow conserve aussi son rollback `087` UUID+etag avec
+   release_sha et previous_version_id vides.
 
-Dispatch préparé, à exécuter seulement lors de cette étape approuvée :
+Exemple de référence pour `stage`, applicable depuis la baseline `087` à 100 %,
+après un retour arrière éventuel :
 
 ```bash
 gh workflow run catalogue-legacy-release.yml --ref master \
@@ -91,5 +103,6 @@ gh workflow run catalogue-legacy-release.yml --ref master \
 ```
 
 Remplacer `stage` par `promote` ou `rollback` pour les étapes correspondantes.
-Ne pas utiliser la CLI locale pour contourner la revue GitHub `production`.
+Utiliser les workflows de `master` pour conserver les tests, attestations,
+canaris et contrôles de trafic; ne pas les contourner par un déploiement local.
 La candidate advanced `009384da` ne doit jamais être promue pour ce lot catalogue.
